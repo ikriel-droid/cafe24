@@ -9,8 +9,46 @@ from sqlalchemy.orm import Session, selectinload
 from app.ai.base import ClassificationResult, DraftReplyResult
 from app.ai.factory import get_ai_provider
 from app.core.config import get_settings
-from app.models import AuditLog, Claim, ClaimCategory, ClaimStatus, Merchant, Policy, SuggestedAction
+from app.models import (
+    AuditLog,
+    Claim,
+    ClaimCategory,
+    ClaimMessage,
+    ClaimStatus,
+    ClaimUrgency,
+    Merchant,
+    Policy,
+    SuggestedAction,
+)
 from app.schemas import ClaimNoteCreate, DashboardSummary, PolicyUpdate
+
+
+MOCK_WEBHOOK_RULES: dict[str, dict[str, object]] = {
+    "order.cancel.requested": {
+        "category": ClaimCategory.CANCELLATION,
+        "status": ClaimStatus.IN_REVIEW,
+        "urgency": ClaimUrgency.HIGH,
+        "message": "Cafe24 mock webhook으로 주문 취소 요청이 접수되었습니다.",
+    },
+    "claim.exchange.requested": {
+        "category": ClaimCategory.EXCHANGE,
+        "status": ClaimStatus.IN_REVIEW,
+        "urgency": ClaimUrgency.MEDIUM,
+        "message": "Cafe24 mock webhook으로 교환 요청이 접수되었습니다.",
+    },
+    "claim.return.requested": {
+        "category": ClaimCategory.RETURN,
+        "status": ClaimStatus.IN_REVIEW,
+        "urgency": ClaimUrgency.MEDIUM,
+        "message": "Cafe24 mock webhook으로 반품 요청이 접수되었습니다.",
+    },
+    "delivery.delay.reported": {
+        "category": ClaimCategory.DELIVERY,
+        "status": ClaimStatus.IN_REVIEW,
+        "urgency": ClaimUrgency.HIGH,
+        "message": "Cafe24 mock webhook으로 배송 지연 이슈가 접수되었습니다.",
+    },
+}
 
 
 def get_default_merchant(session: Session, merchant_id: int | None = None) -> Merchant:
@@ -135,6 +173,61 @@ def add_claim_note(session: Session, claim_id: int, payload: ClaimNoteCreate) ->
     session.commit()
     session.expire_all()
     return get_claim(session, claim_id)
+
+
+def apply_mock_webhook_to_claim(
+    session: Session,
+    merchant_id: int,
+    event_type: str,
+    order_no: str | None = None,
+) -> Claim | None:
+    if not order_no:
+        return None
+
+    rule = MOCK_WEBHOOK_RULES.get(event_type)
+    if rule is None:
+        return None
+
+    query = select(Claim).where(Claim.merchant_id == merchant_id, Claim.order_no == order_no)
+    claim = session.scalar(query)
+    if claim is None:
+        return None
+
+    previous_category = claim.category.value
+    previous_status = claim.status.value
+    previous_urgency = claim.urgency.value
+
+    claim.category = rule["category"]
+    claim.status = rule["status"]
+    claim.urgency = rule["urgency"]
+
+    session.add(
+        ClaimMessage(
+            claim_id=claim.id,
+            role="system",
+            body=f"{rule['message']} 주문번호 {claim.order_no} 기준으로 운영 검토가 필요합니다.",
+        )
+    )
+    record_audit_log(
+        session,
+        claim_id=claim.id,
+        actor="cafe24_mock_webhook",
+        event_type="cafe24_mock_webhook_received",
+        payload_json={
+            "event_type": event_type,
+            "order_no": claim.order_no,
+            "previous_category": previous_category,
+            "previous_status": previous_status,
+            "previous_urgency": previous_urgency,
+            "next_category": claim.category.value,
+            "next_status": claim.status.value,
+            "next_urgency": claim.urgency.value,
+        },
+    )
+    session.add(claim)
+    session.commit()
+    session.expire_all()
+    return get_claim(session, claim.id)
 
 
 def classify_claim(session: Session, claim_id: int) -> ClassificationResult:

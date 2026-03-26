@@ -117,6 +117,8 @@ class Cafe24ActivityEvent(BaseModel):
     title: str
     detail: str
     batch_id: str | None
+    claim_id: int | None = None
+    order_no: str | None = None
 
 
 class Cafe24IntegrationStatus(BaseModel):

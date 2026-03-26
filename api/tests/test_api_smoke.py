@@ -146,6 +146,18 @@ def test_cafe24_mock_webhook_increases_pending_count(monkeypatch) -> None:
         assert payload["recent_events"][0]["event_type"] == "mock_webhook"
         assert payload["recent_events"][0]["status"] == "received"
         assert "CM-240301-011" in payload["recent_events"][0]["detail"]
+        assert payload["recent_events"][0]["claim_id"] is not None
+        assert payload["recent_events"][0]["order_no"] == "CM-240301-011"
+
+        claim_response = client.get(f"/api/claims/{payload['recent_events'][0]['claim_id']}")
+        assert claim_response.status_code == 200
+        claim_payload = claim_response.json()
+        assert claim_payload["order_no"] == "CM-240301-011"
+        assert claim_payload["category"] == "return"
+        assert claim_payload["status"] == "in_review"
+        assert claim_payload["urgency"] == "medium"
+        assert claim_payload["audit_logs"][0]["event_type"] == "cafe24_mock_webhook_received"
+        assert claim_payload["messages"][-1]["role"] == "system"
 
 
 def test_cafe24_callback_redirects_to_console(monkeypatch) -> None:

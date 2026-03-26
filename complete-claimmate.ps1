@@ -266,7 +266,7 @@ function Invoke-SmokeStage {
   $summary = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/dashboard/summary"
   $policy = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/policy"
   $sync = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/integrations/cafe24/mock-sync" -Method Post
-  $webhook = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/integrations/cafe24/mock-webhook" -Method Post -Body '{"event_type":"delivery.delay.reported"}' -ContentType "application/json"
+  $webhook = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/integrations/cafe24/mock-webhook" -Method Post -Body '{"event_type":"delivery.delay.reported","order_no":"CM-240301-006"}' -ContentType "application/json"
   $classification = Invoke-RestMethod -Uri ("http://127.0.0.1:8000/api/claims/{0}/classify" -f $SmokeClaimId) -Method Post
   $draft = Invoke-RestMethod -Uri ("http://127.0.0.1:8000/api/claims/{0}/draft-reply" -f $SmokeClaimId) -Method Post
 

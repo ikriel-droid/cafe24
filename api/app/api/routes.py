@@ -24,6 +24,7 @@ from app.schemas import (
     PolicyUpdate,
 )
 from app.services.claim_service import (
+    apply_mock_webhook_to_claim,
     add_claim_note,
     classify_claim,
     get_default_merchant,
@@ -174,6 +175,12 @@ def cafe24_mock_webhook(
 ) -> Cafe24IntegrationStatus:
     settings = get_settings()
     merchant = get_default_merchant(db, merchant_id)
+    affected_claim = apply_mock_webhook_to_claim(
+        db,
+        merchant_id=merchant.id,
+        event_type=payload.event_type,
+        order_no=payload.order_no,
+    )
     claims = list_claims(db, merchant_id=merchant.id)
     service = build_cafe24_service(settings)
     return Cafe24IntegrationStatus.model_validate(
@@ -183,6 +190,7 @@ def cafe24_mock_webhook(
             settings,
             event_type=payload.event_type,
             order_no=payload.order_no,
+            claim_id=affected_claim.id if affected_claim else None,
         )
     )
 

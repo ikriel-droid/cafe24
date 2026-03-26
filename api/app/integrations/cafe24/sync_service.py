@@ -25,6 +25,8 @@ class Cafe24ActivityEvent:
     title: str
     detail: str
     batch_id: str | None = None
+    claim_id: int | None = None
+    order_no: str | None = None
 
 
 @dataclass(slots=True)
@@ -177,6 +179,8 @@ class Cafe24SyncService:
                     "title": event.title,
                     "detail": event.detail,
                     "batch_id": event.batch_id,
+                    "claim_id": event.claim_id,
+                    "order_no": event.order_no,
                 }
                 for event in snapshot.recent_events or []
             ],
@@ -218,6 +222,7 @@ class Cafe24SyncService:
         settings: Settings,
         event_type: str,
         order_no: str | None = None,
+        claim_id: int | None = None,
     ) -> dict[str, object]:
         snapshot = self._get_snapshot(merchant.id)
         title, description = MOCK_WEBHOOK_LABELS.get(
@@ -233,6 +238,8 @@ class Cafe24SyncService:
                 status="received",
                 title=f"{title} webhook received",
                 detail=f"{description}{f' 주문번호: {order_no}.' if order_no else ''}",
+                claim_id=claim_id,
+                order_no=order_no,
             ),
         )
         return self.get_status(merchant, claims, settings)

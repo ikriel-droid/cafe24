@@ -335,7 +335,15 @@ export function InboxPage() {
                     <Badge tone={toneForActivityStatus(event.status)}>{event.status}</Badge>
                   </div>
                   <p>{event.detail}</p>
-                  <p className="muted">{formatDate(event.occurred_at)}</p>
+                  <div className="actions">
+                    <p className="muted">{formatDate(event.occurred_at)}</p>
+                    {event.order_no ? <span className="muted">order: {event.order_no}</span> : null}
+                    {event.claim_id ? (
+                      <Link href={`/claims/${event.claim_id}`} className="button ghost">
+                        Open Claim
+                      </Link>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>

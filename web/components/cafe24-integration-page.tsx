@@ -396,7 +396,15 @@ export function Cafe24IntegrationPage() {
                     </div>
                     <p>{event.detail}</p>
                     <p className="muted">{formatDate(event.occurred_at)}</p>
-                    {event.batch_id ? <p className="timeline-meta">batch_id: {event.batch_id}</p> : null}
+                    <div className="actions">
+                      {event.order_no ? <span className="muted">order: {event.order_no}</span> : null}
+                      {event.batch_id ? <span className="muted">batch_id: {event.batch_id}</span> : null}
+                      {event.claim_id ? (
+                        <Link href={`/claims/${event.claim_id}`} className="button ghost">
+                          Open Claim
+                        </Link>
+                      ) : null}
+                    </div>
                   </div>
                 ))}
               </div>

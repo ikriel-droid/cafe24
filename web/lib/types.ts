@@ -117,6 +117,8 @@ export interface Cafe24ActivityEvent {
   title: string;
   detail: string;
   batch_id: string | null;
+  claim_id: number | null;
+  order_no: string | null;
 }
 
 export interface Cafe24IntegrationStatus {
