@@ -87,11 +87,13 @@ function formatPercent(value: number | null) {
   if (value === null) {
     return "-";
   }
+
   return `${Math.round(value * 100)}%`;
 }
 
 function buildCafe24Overview(status: Cafe24IntegrationStatus): DashboardCafe24Overview {
   const latestEvent = status.recent_events[0];
+
   return {
     health_status: status.health_status,
     health_title: status.health_title,
@@ -147,11 +149,13 @@ export function InboxPage() {
   const [autoTriagedOnly, setAutoTriagedOnly] = useState(false);
   const [replyReadyOnly, setReplyReadyOnly] = useState(false);
   const [replySentOnly, setReplySentOnly] = useState(false);
+  const [followUpNeededOnly, setFollowUpNeededOnly] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncWorking, setSyncWorking] = useState(false);
+
   const deferredSearchText = useDeferredValue(searchText);
   const sortedClaims = [...claims].sort((left, right) => compareClaims(left, right, sortBy));
 
@@ -168,6 +172,7 @@ export function InboxPage() {
     setAutoTriagedOnly(params.get("auto_triaged") === "true");
     setReplyReadyOnly(params.get("reply_ready") === "true");
     setReplySentOnly(params.get("reply_sent") === "true");
+    setFollowUpNeededOnly(params.get("follow_up_needed") === "true");
     setIsInitialized(true);
   }, []);
 
@@ -190,6 +195,7 @@ export function InboxPage() {
       if (autoTriagedOnly) search.set("auto_triaged", "true");
       if (replyReadyOnly) search.set("reply_ready", "true");
       if (replySentOnly) search.set("reply_sent", "true");
+      if (followUpNeededOnly) search.set("follow_up_needed", "true");
 
       const queryString = search.toString();
       const claimsPath = queryString ? `/api/claims?${queryString}` : "/api/claims";
@@ -203,26 +209,30 @@ export function InboxPage() {
         ]);
 
         if (claimsResult.status !== "fulfilled" || summaryResult.status !== "fulfilled") {
-          throw new Error("목록을 불러오지 못했습니다.");
+          throw new Error("클레임 목록을 불러오지 못했습니다.");
         }
 
-        if (!cancelled) {
-          setClaims(claimsResult.value);
-          if (syncResult.status === "fulfilled") {
-            setSyncStatus(syncResult.value);
-            setSummary({
-              ...summaryResult.value,
-              cafe24: buildCafe24Overview(syncResult.value),
-            });
-          } else {
-            setSummary(summaryResult.value);
-            setSyncStatus(null);
-            setSyncError("Cafe24 상태를 일시적으로 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.");
-          }
+        if (cancelled) {
+          return;
         }
+
+        setClaims(claimsResult.value);
+
+        if (syncResult.status === "fulfilled") {
+          setSyncStatus(syncResult.value);
+          setSummary({
+            ...summaryResult.value,
+            cafe24: buildCafe24Overview(syncResult.value),
+          });
+          return;
+        }
+
+        setSummary(summaryResult.value);
+        setSyncStatus(null);
+        setSyncError("Cafe24 상태는 일시적으로 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.");
       } catch (loadError) {
         if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : "목록을 불러오지 못했습니다.");
+          setError(loadError instanceof Error ? loadError.message : "클레임 목록을 불러오지 못했습니다.");
         }
       } finally {
         if (!cancelled) {
@@ -235,7 +245,7 @@ export function InboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [category, status, deferredSearchText, autoTriagedOnly, replyReadyOnly, replySentOnly, isInitialized]);
+  }, [category, status, deferredSearchText, autoTriagedOnly, replyReadyOnly, replySentOnly, followUpNeededOnly, isInitialized]);
 
   useEffect(() => {
     if (!isInitialized) {
@@ -250,11 +260,12 @@ export function InboxPage() {
     if (autoTriagedOnly) params.set("auto_triaged", "true");
     if (replyReadyOnly) params.set("reply_ready", "true");
     if (replySentOnly) params.set("reply_sent", "true");
+    if (followUpNeededOnly) params.set("follow_up_needed", "true");
 
     const query = params.toString();
     const nextUrl = query ? `/inbox?${query}` : "/inbox";
     window.history.replaceState(null, "", nextUrl);
-  }, [category, status, sortBy, searchText, autoTriagedOnly, replyReadyOnly, replySentOnly, isInitialized]);
+  }, [category, status, sortBy, searchText, autoTriagedOnly, replyReadyOnly, replySentOnly, followUpNeededOnly, isInitialized]);
 
   async function handleRunMockSync() {
     setSyncWorking(true);
@@ -264,6 +275,7 @@ export function InboxPage() {
       const data = await apiFetch<Cafe24IntegrationStatus>("/api/integrations/cafe24/mock-sync", {
         method: "POST",
       });
+
       setSyncStatus(data);
       setSummary((current) => (current ? { ...current, cafe24: buildCafe24Overview(data) } : current));
     } catch (loadError) {
@@ -273,12 +285,23 @@ export function InboxPage() {
     }
   }
 
+  function resetFilters() {
+    setSearchText("");
+    setCategory("");
+    setStatus("");
+    setSortBy("priority");
+    setAutoTriagedOnly(false);
+    setReplyReadyOnly(false);
+    setReplySentOnly(false);
+    setFollowUpNeededOnly(false);
+  }
+
   return (
     <div className="stack">
       <header className="page-header">
         <div>
-          <h2>Claim Inbox</h2>
-          <p>카테고리, 상태, 자동화 기준으로 문의를 빠르게 정리하고 상세 화면으로 이동합니다.</p>
+          <h2>클레임 인박스</h2>
+          <p>주문, 고객, 정책 대응 흐름을 한 화면에서 보고 빠르게 처리하는 운영 화면입니다.</p>
         </div>
         <div className="actions">
           <Link href="/dashboard" className="button secondary">
@@ -292,7 +315,7 @@ export function InboxPage() {
           <div className="page-header compact-header">
             <div>
               <h3>Cafe24 Mock Sync</h3>
-              <p>인박스에서 바로 연동 상태를 확인하고 필요하면 Mock Sync를 다시 실행할 수 있습니다.</p>
+              <p>연동 상태를 확인하고 필요할 때 Mock Sync를 다시 실행할 수 있습니다.</p>
             </div>
             <div className="actions">
               <Badge tone={toneForSyncResult(syncStatus)}>
@@ -306,6 +329,7 @@ export function InboxPage() {
               </button>
             </div>
           </div>
+
           <div className="grid cols-3">
             <div className="summary-row tile-row">
               <span className="muted">마지막 Sync</span>
@@ -320,12 +344,14 @@ export function InboxPage() {
               <strong>{syncStatus.last_sync_batch_id ?? "-"}</strong>
             </div>
           </div>
+
           <div className="category-summary">
             <Badge tone="neutral">Mall {syncStatus.mall_name}</Badge>
             <Badge tone="neutral">Synced Orders {syncStatus.synced_orders}</Badge>
             <Badge tone="neutral">Synced Claims {syncStatus.synced_claims}</Badge>
             <Badge tone="accent">Pending Claims {syncStatus.pending_claims}</Badge>
           </div>
+
           <div className="health-banner">
             <div className="actions">
               <Badge tone={toneForHealthStatus(syncStatus.health_status)}>{syncStatus.health_title}</Badge>
@@ -333,7 +359,7 @@ export function InboxPage() {
             </div>
             <p>{syncStatus.health_detail}</p>
             <div className="actions">
-              <span className="muted">다음 작업</span>
+              <span className="muted">다음 액션</span>
               {syncStatus.next_action_type === "mock_sync" ? (
                 <button className="button secondary" type="button" onClick={handleRunMockSync} disabled={syncWorking}>
                   {syncStatus.next_action_label}
@@ -345,6 +371,7 @@ export function InboxPage() {
               ) : null}
             </div>
           </div>
+
           {syncStatus.recent_events.length > 0 ? (
             <div className="mini-activity-list">
               {syncStatus.recent_events.slice(0, 2).map((event) => (
@@ -369,6 +396,7 @@ export function InboxPage() {
           ) : (
             <div className="empty-state inline-state">아직 표시할 Cafe24 activity가 없습니다.</div>
           )}
+
           {syncError ? <div className="error-state inline-state">{syncError}</div> : null}
         </section>
       ) : null}
@@ -380,32 +408,37 @@ export function InboxPage() {
           <div className="card">
             <p>현재 결과</p>
             <div className="metric-value">{summary.total_claims}</div>
-            <p className="metric-caption">지금 필터 기준으로 보이는 클레임 수</p>
+            <p className="metric-caption">지금 필터 기준으로 보이는 전체 클레임 수입니다.</p>
           </div>
           <div className="card">
             <p>접수 + 검토 중</p>
             <div className="metric-value">{summary.open_claims + summary.in_review_claims}</div>
-            <p className="metric-caption">바로 대응이 필요한 진행 중 클레임</p>
+            <p className="metric-caption">당장 운영 판단이 필요한 진행 중 클레임입니다.</p>
           </div>
           <div className="card">
             <p>높은 긴급도</p>
             <div className="metric-value">{summary.high_urgency_claims}</div>
-            <p className="metric-caption">우선 확인이 필요한 문의</p>
+            <p className="metric-caption">우선 확인이 필요한 고긴급 건입니다.</p>
           </div>
           <div className="card">
             <p>자동 triage 완료</p>
             <div className="metric-value">{summary.auto_triaged_claims}</div>
-            <p className="metric-caption">webhook 기준 자동 분류된 건</p>
+            <p className="metric-caption">Webhook 기준 자동 분류까지 끝난 건입니다.</p>
           </div>
           <div className="card">
             <p>답변 초안 준비</p>
             <div className="metric-value">{summary.reply_ready_claims}</div>
-            <p className="metric-caption">바로 복사 가능한 답변 초안이 있는 건</p>
+            <p className="metric-caption">바로 검토하거나 복사할 수 있는 답변 초안이 있습니다.</p>
           </div>
           <div className="card">
             <p>답변 발송 완료</p>
             <div className="metric-value">{summary.reply_sent_claims}</div>
-            <p className="metric-caption">발송 처리와 로그 기록까지 끝난 건</p>
+            <p className="metric-caption">답변 발송 로그까지 남은 클레임입니다.</p>
+          </div>
+          <div className="card">
+            <p>후속 확인 필요</p>
+            <div className="metric-value">{summary.follow_up_needed_claims}</div>
+            <p className="metric-caption">답변은 보냈지만 아직 완료 처리되지 않은 후속 점검 건입니다.</p>
           </div>
           {summary.cafe24 ? (
             <div className="card">
@@ -451,7 +484,7 @@ export function InboxPage() {
             <input
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
-              placeholder="주문번호, 고객명, 상품명, 문의 내용으로 검색해 보세요"
+              placeholder="주문번호, 고객명, 상품명, 문의 내용으로 검색해 보세요."
             />
           </div>
           <div className="field">
@@ -481,19 +514,7 @@ export function InboxPage() {
               ))}
             </select>
           </div>
-          <button
-            className="button ghost"
-            type="button"
-            onClick={() => {
-              setSearchText("");
-              setCategory("");
-              setStatus("");
-              setSortBy("priority");
-              setAutoTriagedOnly(false);
-              setReplyReadyOnly(false);
-              setReplySentOnly(false);
-            }}
-          >
+          <button className="button ghost" type="button" onClick={resetFilters}>
             필터 초기화
           </button>
         </div>
@@ -519,6 +540,13 @@ export function InboxPage() {
             onClick={() => setReplySentOnly((current) => !current)}
           >
             답변 발송 완료만 보기
+          </button>
+          <button
+            type="button"
+            className={`toggle-chip ${followUpNeededOnly ? "active" : ""}`}
+            onClick={() => setFollowUpNeededOnly((current) => !current)}
+          >
+            후속 확인 필요만 보기
           </button>
         </div>
 
@@ -574,7 +602,11 @@ export function InboxPage() {
                           {claim.automation.auto_triaged ? <Badge tone="accent">자동 분류</Badge> : null}
                           {claim.automation.reply_ready ? <Badge tone="teal">답변 초안 준비</Badge> : null}
                           {claim.automation.reply_sent ? <Badge tone="neutral">답변 발송</Badge> : null}
-                          {!claim.automation.auto_triaged && !claim.automation.reply_ready && !claim.automation.reply_sent ? (
+                          {claim.automation.follow_up_needed ? <Badge tone="danger">후속 확인 필요</Badge> : null}
+                          {!claim.automation.auto_triaged &&
+                          !claim.automation.reply_ready &&
+                          !claim.automation.reply_sent &&
+                          !claim.automation.follow_up_needed ? (
                             <span className="muted">대기</span>
                           ) : null}
                         </div>

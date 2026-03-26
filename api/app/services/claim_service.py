@@ -89,6 +89,7 @@ def list_claims(
     auto_triaged: bool | None = None,
     reply_ready: bool | None = None,
     reply_sent: bool | None = None,
+    follow_up_needed: bool | None = None,
 ) -> list[Claim]:
     merchant = get_default_merchant(session, merchant_id)
     query = (
@@ -118,7 +119,7 @@ def list_claims(
             )
     claims = list(session.scalars(query))
 
-    if auto_triaged is None and reply_ready is None and reply_sent is None:
+    if auto_triaged is None and reply_ready is None and reply_sent is None and follow_up_needed is None:
         return claims
 
     filtered_claims: list[Claim] = []
@@ -129,6 +130,8 @@ def list_claims(
         if reply_ready is not None and automation["reply_ready"] != reply_ready:
             continue
         if reply_sent is not None and automation["reply_sent"] != reply_sent:
+            continue
+        if follow_up_needed is not None and automation["follow_up_needed"] != follow_up_needed:
             continue
         filtered_claims.append(claim)
     return filtered_claims
@@ -176,11 +179,14 @@ def build_claim_automation_summary(claim: Claim) -> dict[str, object]:
         if isinstance(source_value, str):
             source_event = source_value
 
+    follow_up_needed = latest_reply_sent_log is not None and claim.status != ClaimStatus.DONE
+
     return {
         "auto_triaged": auto_triage_log is not None,
         "auto_triaged_at": auto_triage_log.created_at if auto_triage_log else None,
         "reply_ready": latest_reply is not None and bool(latest_reply.draft_reply.strip()),
         "reply_sent": latest_reply_sent_log is not None,
+        "follow_up_needed": follow_up_needed,
         "reply_sent_at": latest_reply_sent_log.created_at if latest_reply_sent_log else None,
         "reply_sent_by": latest_reply_sent_log.actor if latest_reply_sent_log else None,
         "classification_confidence": classification_confidence,
@@ -425,6 +431,7 @@ def get_dashboard_summary(
     auto_triaged: bool | None = None,
     reply_ready: bool | None = None,
     reply_sent: bool | None = None,
+    follow_up_needed: bool | None = None,
 ) -> DashboardSummary:
     claims = list_claims(
         session,
@@ -435,6 +442,7 @@ def get_dashboard_summary(
         auto_triaged=auto_triaged,
         reply_ready=reply_ready,
         reply_sent=reply_sent,
+        follow_up_needed=follow_up_needed,
     )
     by_category_counter = Counter(claim.category.value for claim in claims)
     automation_summaries = [build_claim_automation_summary(claim) for claim in claims]
@@ -450,5 +458,6 @@ def get_dashboard_summary(
         auto_triaged_claims=sum(summary["auto_triaged"] is True for summary in automation_summaries),
         reply_ready_claims=sum(summary["reply_ready"] is True for summary in automation_summaries),
         reply_sent_claims=sum(summary["reply_sent"] is True for summary in automation_summaries),
+        follow_up_needed_claims=sum(summary["follow_up_needed"] is True for summary in automation_summaries),
         by_category=dict(sorted(by_category_counter.items())),
     )

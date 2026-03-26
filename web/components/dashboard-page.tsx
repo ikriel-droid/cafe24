@@ -85,9 +85,9 @@ export function DashboardPage() {
       .slice(0, 4);
   }, [claims]);
 
-  const followUpAfterReply = useMemo(() => {
+  const followUpQueue = useMemo(() => {
     return claims
-      .filter((claim) => claim.automation.reply_sent && claim.status !== "done")
+      .filter((claim) => claim.automation.follow_up_needed)
       .sort((left, right) => {
         const rightTime = right.automation.reply_sent_at ? new Date(right.automation.reply_sent_at).getTime() : 0;
         const leftTime = left.automation.reply_sent_at ? new Date(left.automation.reply_sent_at).getTime() : 0;
@@ -115,14 +115,14 @@ export function DashboardPage() {
       <header className="page-header">
         <div>
           <h2>운영 대시보드</h2>
-          <p>오늘 처리할 클레임과 정책 요약, Cafe24 상태를 한 번에 보는 시작 화면입니다.</p>
+          <p>지금 바로 처리할 건, 자동화 큐, 답변 후 후속 확인까지 한 번에 보는 시작 화면입니다.</p>
         </div>
         <div className="actions">
           <Link href="/inbox?sort=priority" className="button">
             우선순위 인박스
           </Link>
           <Link href="/settings/policy" className="button secondary">
-            정책 확인
+            정책 설정
           </Link>
         </div>
       </header>
@@ -136,22 +136,22 @@ export function DashboardPage() {
             <div className="card">
               <p>전체 클레임</p>
               <div className="metric-value">{summary.total_claims}</div>
-              <p className="metric-caption">데모 데이터 기준 현재 추적 건수</p>
+              <p className="metric-caption">현재 추적 중인 전체 클레임 수입니다.</p>
             </div>
             <div className="card">
               <p>바로 처리할 건</p>
               <div className="metric-value">{summary.open_claims + summary.in_review_claims}</div>
-              <p className="metric-caption">접수 + 검토 중 합계</p>
+              <p className="metric-caption">접수와 검토 중 상태를 합친 운영 큐입니다.</p>
             </div>
             <div className="card">
               <p>높은 긴급도</p>
               <div className="metric-value">{summary.high_urgency_claims}</div>
-              <p className="metric-caption">즉시 확인이 필요한 문의</p>
+              <p className="metric-caption">우선 확인이 필요한 고긴급 문의입니다.</p>
             </div>
             <div className="card">
               <p>자동 triage 완료</p>
               <div className="metric-value">{summary.auto_triaged_claims}</div>
-              <p className="metric-caption">Cafe24 webhook 기준 자동 분류된 건</p>
+              <p className="metric-caption">Cafe24 webhook 기준 자동 분류가 끝난 건입니다.</p>
               <div className="actions">
                 <Link href="/inbox?sort=priority&auto_triaged=true" className="button ghost">
                   자동 분류 보기
@@ -161,7 +161,7 @@ export function DashboardPage() {
             <div className="card">
               <p>답변 초안 준비</p>
               <div className="metric-value">{summary.reply_ready_claims}</div>
-              <p className="metric-caption">바로 복사 가능한 초안이 있는 건</p>
+              <p className="metric-caption">검토 후 바로 발송할 수 있는 초안이 있습니다.</p>
               <div className="actions">
                 <Link href="/inbox?sort=priority&reply_ready=true" className="button ghost">
                   초안 준비 보기
@@ -171,7 +171,7 @@ export function DashboardPage() {
             <div className="card">
               <p>답변 발송 완료</p>
               <div className="metric-value">{summary.reply_sent_claims}</div>
-              <p className="metric-caption">발송 처리와 로그 기록까지 끝난 건</p>
+              <p className="metric-caption">답변 발송 로그까지 기록된 클레임입니다.</p>
               <div className="actions">
                 <Link href="/inbox?sort=priority&reply_sent=true" className="button ghost">
                   발송 완료 보기
@@ -179,9 +179,14 @@ export function DashboardPage() {
               </div>
             </div>
             <div className="card">
-              <p>발송 후 후속 확인</p>
-              <div className="metric-value">{followUpAfterReply.length}</div>
-              <p className="metric-caption">답변은 보냈지만 아직 닫지 않은 클레임</p>
+              <p>후속 확인 필요</p>
+              <div className="metric-value">{summary.follow_up_needed_claims}</div>
+              <p className="metric-caption">답변은 보냈지만 아직 닫히지 않아 재확인이 필요한 건입니다.</p>
+              <div className="actions">
+                <Link href="/inbox?sort=priority&follow_up_needed=true" className="button ghost">
+                  후속 확인 보기
+                </Link>
+              </div>
             </div>
             {summary.cafe24 ? (
               <div className="card">
@@ -213,7 +218,7 @@ export function DashboardPage() {
             <div className="card stack">
               <div>
                 <h3>우선 처리 큐</h3>
-                <p>긴급도와 접수 상태를 기준으로 지금 먼저 볼 문의를 모았습니다.</p>
+                <p>긴급도와 현재 상태 기준으로 먼저 봐야 할 클레임입니다.</p>
               </div>
               {queueClaims.length > 0 ? (
                 <div className="timeline">
@@ -235,14 +240,14 @@ export function DashboardPage() {
                   ))}
                 </div>
               ) : (
-                <div className="empty-state inline-state">현재 바로 처리할 클레임이 없습니다.</div>
+                <div className="empty-state inline-state">지금 바로 처리할 클레임이 없습니다.</div>
               )}
             </div>
 
             <div className="card stack">
               <div>
                 <h3>자동화 큐</h3>
-                <p>자동 triage와 답변 초안은 준비됐지만 아직 발송 전인 건입니다.</p>
+                <p>자동 분류와 초안은 준비됐고, 운영자가 최종 확인만 하면 되는 건입니다.</p>
               </div>
               {automationQueue.length > 0 ? (
                 <div className="timeline">
@@ -267,7 +272,7 @@ export function DashboardPage() {
                   ))}
                 </div>
               ) : (
-                <div className="empty-state inline-state">현재 자동화 큐에 남아 있는 클레임이 없습니다.</div>
+                <div className="empty-state inline-state">지금 자동화 큐에 남아 있는 클레임이 없습니다.</div>
               )}
             </div>
           </section>
@@ -276,17 +281,17 @@ export function DashboardPage() {
             <div className="card stack">
               <div>
                 <h3>발송 후 후속 확인</h3>
-                <p>답변은 보냈지만 아직 완료 처리되지 않은 건을 다시 확인합니다.</p>
+                <p>답변은 보냈지만 아직 완료 처리되지 않아 다시 확인할 건입니다.</p>
               </div>
-              {followUpAfterReply.length > 0 ? (
+              {followUpQueue.length > 0 ? (
                 <div className="timeline">
-                  {followUpAfterReply.map((claim) => (
+                  {followUpQueue.map((claim) => (
                     <Link key={claim.id} href={`/claims/${claim.id}`} className="timeline-item">
                       <div className="actions">
                         <strong>
                           {claim.order_no} / {claim.customer_name}
                         </strong>
-                        <Badge tone="neutral">답변 발송</Badge>
+                        <Badge tone="danger">후속 확인 필요</Badge>
                       </div>
                       <p>{claim.product_name}</p>
                       <div className="actions">
@@ -300,7 +305,7 @@ export function DashboardPage() {
                   ))}
                 </div>
               ) : (
-                <div className="empty-state inline-state">현재 발송 후 후속 확인이 필요한 클레임이 없습니다.</div>
+                <div className="empty-state inline-state">지금 후속 확인이 필요한 클레임이 없습니다.</div>
               )}
             </div>
 
@@ -343,24 +348,28 @@ export function DashboardPage() {
           <section className="card stack">
             <div>
               <h3>바로 가기</h3>
-              <p>운영자가 자주 여는 작업으로 바로 이동합니다.</p>
+              <p>운영자가 자주 여는 화면을 빠르게 열 수 있게 묶었습니다.</p>
             </div>
             <div className="resource-links">
               <Link href="/inbox?sort=priority" className="resource-link">
                 <strong>우선순위 인박스 열기</strong>
-                <p>긴급도와 상태 기준으로 바로 처리할 문의를 확인합니다.</p>
+                <p>긴급도와 상태 기준으로 먼저 처리할 문의를 확인합니다.</p>
               </Link>
               <Link href="/inbox?sort=priority&auto_triaged=true&reply_ready=true" className="resource-link">
                 <strong>자동화 큐 열기</strong>
-                <p>자동 분류와 답변 초안은 준비됐지만 아직 발송 전인 건만 모아서 봅니다.</p>
+                <p>자동 분류와 초안이 준비됐지만 아직 발송 전인 건만 모아 봅니다.</p>
+              </Link>
+              <Link href="/inbox?sort=priority&follow_up_needed=true" className="resource-link">
+                <strong>후속 확인 큐 열기</strong>
+                <p>답변 발송 후 완료 처리되지 않은 건만 다시 확인합니다.</p>
               </Link>
               <Link href="/inbox?sort=priority&reply_sent=true" className="resource-link">
                 <strong>발송 완료 인박스 열기</strong>
-                <p>답변 발송 로그까지 남은 클레임을 다시 확인합니다.</p>
+                <p>답변 발송 기록이 남은 클레임 전체를 다시 점검합니다.</p>
               </Link>
               <Link href="/settings/policy" className="resource-link">
-                <strong>정책 수정</strong>
-                <p>교환/반품/환불 정책을 조정해서 답변 초안을 매장 정책에 맞춥니다.</p>
+                <strong>정책 설정</strong>
+                <p>교환, 반품, 환불 정책을 수정해서 답변 초안을 매장 정책에 맞춥니다.</p>
               </Link>
             </div>
           </section>

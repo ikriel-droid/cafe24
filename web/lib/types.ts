@@ -40,6 +40,7 @@ export interface ClaimAutomation {
   auto_triaged_at: string | null;
   reply_ready: boolean;
   reply_sent: boolean;
+  follow_up_needed: boolean;
   reply_sent_at: string | null;
   reply_sent_by: string | null;
   classification_confidence: number | null;
@@ -90,6 +91,7 @@ export interface DashboardSummary {
   auto_triaged_claims: number;
   reply_ready_claims: number;
   reply_sent_claims: number;
+  follow_up_needed_claims: number;
   by_category: Record<string, number>;
   cafe24: DashboardCafe24Overview | null;
 }

@@ -32,9 +32,23 @@ def test_claim_reply_send_can_keep_claim_open(monkeypatch) -> None:
         payload = response.json()
         assert payload["status"] == "in_review"
         assert payload["automation"]["reply_sent"] is True
+        assert payload["automation"]["follow_up_needed"] is True
         assert payload["automation"]["reply_sent_by"] == "qa_operator"
         assert payload["audit_logs"][0]["event_type"] == "reply_sent"
         assert payload["audit_logs"][0]["payload_json"]["mark_done"] is False
+
+        filtered_claims = client.get("/api/claims?follow_up_needed=true")
+        assert filtered_claims.status_code == 200
+        filtered_payload = filtered_claims.json()
+        assert len(filtered_payload) == 1
+        assert filtered_payload[0]["order_no"] == "CM-240301-002"
+        assert filtered_payload[0]["automation"]["follow_up_needed"] is True
+
+        filtered_summary = client.get("/api/dashboard/summary?follow_up_needed=true")
+        assert filtered_summary.status_code == 200
+        summary_payload = filtered_summary.json()
+        assert summary_payload["total_claims"] == 1
+        assert summary_payload["follow_up_needed_claims"] == 1
 
 
 def test_reply_sent_filter_and_summary(monkeypatch) -> None:
@@ -60,6 +74,7 @@ def test_reply_sent_filter_and_summary(monkeypatch) -> None:
         assert response.status_code == 200
         payload = response.json()
         assert payload["automation"]["reply_sent"] is True
+        assert payload["automation"]["follow_up_needed"] is False
         assert payload["automation"]["reply_sent_at"] is not None
         assert payload["automation"]["reply_sent_by"] == "qa_operator"
 
