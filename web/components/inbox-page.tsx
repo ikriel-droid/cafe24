@@ -29,7 +29,7 @@ const categoryOptions: Array<{ value: "" | ClaimCategory; label: string }> = [
 const statusOptions: Array<{ value: "" | ClaimStatus; label: string }> = [
   { value: "", label: "전체 상태" },
   { value: "open", label: "접수" },
-  { value: "in_review", label: "검토중" },
+  { value: "in_review", label: "검토 중" },
   { value: "approved", label: "승인" },
   { value: "rejected", label: "반려" },
   { value: "done", label: "완료" },
@@ -259,7 +259,7 @@ export function InboxPage() {
       <header className="page-header">
         <div>
           <h2>Claim Inbox</h2>
-          <p>카테고리, 상태, 긴급도 기준으로 클레임을 빠르게 정리하고 상세 화면으로 이어집니다.</p>
+          <p>카테고리, 상태, 긴급도를 기준으로 클레임을 빠르게 정리하고 상세 화면으로 이동합니다.</p>
         </div>
         <div className="actions">
           <Link href="/dashboard" className="button secondary">
@@ -363,7 +363,7 @@ export function InboxPage() {
             <div className="metric-value">{summary.total_claims}</div>
           </div>
           <div className="card">
-            <p>접수 + 검토중</p>
+            <p>접수 + 검토 중</p>
             <div className="metric-value">{summary.open_claims + summary.in_review_claims}</div>
           </div>
           <div className="card">
@@ -378,8 +378,8 @@ export function InboxPage() {
               </div>
               <p className="metric-caption">{summary.cafe24.health_detail}</p>
               <p className="metric-caption">
-                {summary.cafe24.last_synced_at ? formatDate(summary.cafe24.last_synced_at) : "아직 sync 없음"} · pending webhook{" "}
-                {summary.cafe24.pending_webhooks} · activity {summary.cafe24.recent_activity_count}
+                {summary.cafe24.last_synced_at ? formatDate(summary.cafe24.last_synced_at) : "아직 sync 없음"} / pending webhook{" "}
+                {summary.cafe24.pending_webhooks} / activity {summary.cafe24.recent_activity_count}
               </p>
               {summary.cafe24.latest_event_title ? (
                 <div className="actions">
@@ -388,7 +388,7 @@ export function InboxPage() {
                   </Badge>
                   <span className="muted">
                     {summary.cafe24.latest_event_title}
-                    {summary.cafe24.latest_event_occurred_at ? ` · ${formatDate(summary.cafe24.latest_event_occurred_at)}` : ""}
+                    {summary.cafe24.latest_event_occurred_at ? ` / ${formatDate(summary.cafe24.latest_event_occurred_at)}` : ""}
                   </span>
                 </div>
               ) : null}
@@ -414,7 +414,7 @@ export function InboxPage() {
             <input
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
-              placeholder="주문번호, 고객명, 상품명, 문의 내용을 검색해 보세요"
+              placeholder="주문번호, 고객명, 상품명, 문의 내용으로 검색해 보세요."
             />
           </div>
           <div className="field">

@@ -90,8 +90,8 @@ export function DashboardPage() {
     <div className="stack">
       <header className="page-header">
         <div>
-          <h2>Operations Dashboard</h2>
-          <p>오늘 처리할 클레임, 정책 요약, Cafe24 상태를 한 번에 확인하는 시작 화면입니다.</p>
+          <h2>운영 대시보드</h2>
+          <p>오늘 처리할 클레임, 정책 요약, Cafe24 상태를 한 번에 보는 시작 화면입니다.</p>
         </div>
         <div className="actions">
           <Link href="/inbox?sort=priority" className="button">
@@ -117,7 +117,7 @@ export function DashboardPage() {
             <div className="card">
               <p>바로 처리할 건</p>
               <div className="metric-value">{summary.open_claims + summary.in_review_claims}</div>
-              <p className="metric-caption">접수 + 검토중 합계</p>
+              <p className="metric-caption">접수 + 검토 중 합계</p>
             </div>
             <div className="card">
               <p>높은 긴급도</p>
@@ -132,7 +132,7 @@ export function DashboardPage() {
                 </div>
                 <p className="metric-caption">{summary.cafe24.health_detail}</p>
                 <p className="metric-caption">
-                  {summary.cafe24.last_synced_at ? formatDate(summary.cafe24.last_synced_at) : "아직 sync 없음"} · pending webhook{" "}
+                  {summary.cafe24.last_synced_at ? formatDate(summary.cafe24.last_synced_at) : "아직 sync 없음"} / pending webhook{" "}
                   {summary.cafe24.pending_webhooks}
                 </p>
                 <div className="actions">
@@ -162,7 +162,7 @@ export function DashboardPage() {
                     <Link key={claim.id} href={`/claims/${claim.id}`} className="timeline-item">
                       <div className="actions">
                         <strong>
-                          {claim.order_no} · {claim.customer_name}
+                          {claim.order_no} / {claim.customer_name}
                         </strong>
                         <Badge tone={toneForUrgency(claim.urgency)}>{urgencyLabels[claim.urgency]}</Badge>
                       </div>
@@ -183,7 +183,7 @@ export function DashboardPage() {
             <div className="card stack">
               <div>
                 <h3>카테고리 분포</h3>
-                <p>어떤 유형의 문의가 몰려 있는지 한눈에 볼 수 있습니다.</p>
+                <p>어떤 유형의 문의가 몰려 있는지 빠르게 확인할 수 있습니다.</p>
               </div>
               <div className="category-summary">
                 {Object.entries(summary.by_category).map(([key, count]) => (
@@ -194,15 +194,15 @@ export function DashboardPage() {
               </div>
               <div className="summary-list">
                 <div className="summary-row">
-                  <span className="muted">승인됨</span>
+                  <span className="muted">승인</span>
                   <strong>{summary.approved_claims}</strong>
                 </div>
                 <div className="summary-row">
-                  <span className="muted">반려됨</span>
+                  <span className="muted">반려</span>
                   <strong>{summary.rejected_claims}</strong>
                 </div>
                 <div className="summary-row">
-                  <span className="muted">완료됨</span>
+                  <span className="muted">완료</span>
                   <strong>{summary.done_claims}</strong>
                 </div>
               </div>
@@ -248,7 +248,7 @@ export function DashboardPage() {
             <div className="card stack">
               <div>
                 <h3>바로 가기</h3>
-                <p>운영자가 가장 자주 쓰는 작업으로 바로 이동합니다.</p>
+                <p>운영자가 자주 여는 작업으로 바로 이동합니다.</p>
               </div>
               <div className="resource-links">
                 <Link href="/inbox?sort=priority" className="resource-link">
@@ -261,7 +261,7 @@ export function DashboardPage() {
                 </Link>
                 <Link href="/settings/policy" className="resource-link">
                   <strong>정책 수정</strong>
-                  <p>교환/반품/환불 정책을 조정해 답변 초안 품질을 맞춥니다.</p>
+                  <p>교환/반품/환불 정책을 조정해 답변 초안을 매장 정책에 맞춥니다.</p>
                 </Link>
               </div>
             </div>

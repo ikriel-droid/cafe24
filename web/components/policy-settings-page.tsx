@@ -92,8 +92,8 @@ export function PolicySettingsPage() {
     <div className="stack">
       <header className="page-header">
         <div>
-          <h2>Merchant Policy</h2>
-          <p>AI 답변 초안이 참고하는 교환, 반품, 환불 정책을 이 화면에서 수정합니다.</p>
+          <h2>판매자 정책</h2>
+          <p>AI 답변 초안에 반영되는 교환, 반품, 환불 정책을 이 화면에서 수정합니다.</p>
         </div>
       </header>
 

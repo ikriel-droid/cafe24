@@ -14,7 +14,7 @@ export const categoryLabels: Record<ClaimCategory, string> = {
 
 export const statusLabels: Record<ClaimStatus, string> = {
   open: "접수",
-  in_review: "검토중",
+  in_review: "검토 중",
   approved: "승인",
   rejected: "반려",
   done: "완료",

@@ -45,7 +45,9 @@ export function Cafe24IntegrationPage() {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [activityFilter, setActivityFilter] = useState<"all" | "mock_sync" | "oauth_callback">("all");
+  const [activityFilter, setActivityFilter] = useState<"all" | "mock_sync" | "oauth_callback" | "mock_webhook">(
+    "all"
+  );
   const [webhookType, setWebhookType] = useState("claim.return.requested");
   const [webhookOrderNo, setWebhookOrderNo] = useState("");
 
@@ -196,7 +198,7 @@ export function Cafe24IntegrationPage() {
       <header className="page-header">
         <div>
           <h2>Cafe24 Integration</h2>
-          <p>실제 네트워크 호출 없이 OAuth, webhook, sync 경계를 로컬에서 검증하는 화면입니다.</p>
+          <p>실제 네트워크 연결 없이 OAuth, webhook, sync 경계를 로컬에서 검증하는 화면입니다.</p>
         </div>
       </header>
 
@@ -217,7 +219,7 @@ export function Cafe24IntegrationPage() {
               <div className="metric-value">{status.synced_claims}</div>
             </div>
             <div className="card">
-              <p>대기중 문의</p>
+              <p>대기 중 문의</p>
               <div className="metric-value">{status.pending_claims}</div>
             </div>
           </section>
@@ -274,7 +276,7 @@ export function Cafe24IntegrationPage() {
             <div className="card stack">
               <div>
                 <h3>Mock Sync</h3>
-                <p>주문 데이터 시드와 클레임 데이터를 기준으로 Cafe24 연결 흐름을 시뮬레이션합니다.</p>
+                <p>주문 데이터와 시드 클레임 데이터를 기준으로 Cafe24 연결 흐름을 시뮬레이션합니다.</p>
               </div>
               <div className="summary-list">
                 <div className="summary-row">
@@ -305,7 +307,7 @@ export function Cafe24IntegrationPage() {
           <section className="card stack">
             <div>
               <h3>다음 연결 지점</h3>
-              <p>실제 Cafe24 연동 작업을 붙일 위치를 메모 형태로 정리해 둔 영역입니다.</p>
+              <p>실제 Cafe24 연동 작업이 붙을 위치를 메모 형태로 정리해둔 영역입니다.</p>
             </div>
             <ul className="plain-list">
               {status.notes.map((note) => (
@@ -317,7 +319,7 @@ export function Cafe24IntegrationPage() {
           <section className="card stack">
             <div>
               <h3>Offline OAuth Test</h3>
-              <p>실제 Cafe24 접근 없이 callback placeholder 흐름을 바로 테스트합니다.</p>
+              <p>실제 Cafe24 연결 없이 callback placeholder 흐름을 바로 테스트합니다.</p>
             </div>
             <div className="category-summary">
               <Badge tone="neutral">State claimmate-local-{status.merchant_id}</Badge>
@@ -360,25 +362,26 @@ export function Cafe24IntegrationPage() {
                 Send Mock Webhook
               </button>
             </div>
-            <p className="muted">
-              webhook을 넣으면 pending webhook 수치가 증가하고 최근 activity에 `received` 이벤트가 추가됩니다.
-            </p>
+            <p className="muted">webhook을 넣으면 pending webhook 수치가 증가하고 최근 activity에 `received` 이벤트가 추가됩니다.</p>
           </section>
 
           <section className="card stack">
             <div>
               <h3>최근 Activity</h3>
-              <p>Mock Sync와 OAuth callback placeholder가 만든 최근 이벤트를 기록합니다.</p>
+              <p>Mock Sync, OAuth callback, webhook placeholder가 만든 최근 이벤트를 기록합니다.</p>
             </div>
             <div className="actions">
               <select
                 className="control-select"
                 value={activityFilter}
-                onChange={(event) => setActivityFilter(event.target.value as "all" | "mock_sync" | "oauth_callback")}
+                onChange={(event) =>
+                  setActivityFilter(event.target.value as "all" | "mock_sync" | "oauth_callback" | "mock_webhook")
+                }
               >
                 <option value="all">전체 이벤트</option>
                 <option value="mock_sync">Mock Sync</option>
                 <option value="oauth_callback">OAuth Callback</option>
+                <option value="mock_webhook">Mock Webhook</option>
               </select>
               <button className="button ghost" onClick={handleClearActivity} disabled={working || status.recent_events.length === 0}>
                 Clear Activity

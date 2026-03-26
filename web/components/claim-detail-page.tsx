@@ -17,7 +17,7 @@ function formatAuditPayload(payload: Record<string, unknown> | null | undefined)
 
   return Object.entries(payload)
     .map(([key, value]) => `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`)
-    .join(" · ");
+    .join(" / ");
 }
 
 async function copyText(value: string) {
@@ -99,7 +99,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
       setNotice("AI 분류를 다시 실행했습니다.");
     } catch (actionError) {
       setNotice(null);
-      setError(actionError instanceof Error ? actionError.message : "재분류에 실패했습니다.");
+      setError(actionError instanceof Error ? actionError.message : "분류에 실패했습니다.");
     } finally {
       setWorkingAction(null);
     }
@@ -130,7 +130,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
     try {
       await copyText(replyDraft.trim());
       setError(null);
-      setNotice("편집 중인 답변 초안을 클립보드에 복사했습니다.");
+      setNotice("현재 편집 중인 답변 초안을 클립보드에 복사했습니다.");
     } catch (copyError) {
       setNotice(null);
       setError(copyError instanceof Error ? copyError.message : "답변 초안 복사에 실패했습니다.");
@@ -308,7 +308,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
           <div className="card stack">
             <div>
               <h3>추천 답변</h3>
-              <p>판매자 정책을 반영한 응대 초안입니다.</p>
+              <p>판매자 정책을 반영한 답변 초안입니다.</p>
             </div>
             <div className="summary-list">
               <div className="summary-row">
@@ -348,7 +348,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
           className="textarea reply-editor"
           value={internalNote}
           onChange={(event) => setInternalNote(event.target.value)}
-          placeholder="예: 고객이 파손 사진 추가 전달 예정, 오늘 15시 이후 재확인"
+          placeholder="예: 고객이 파손 사진 추가 전달 예정, 오늘 15시 이후 회신"
         />
         <div className="actions">
           <button className="button secondary" onClick={handleAddInternalNote} disabled={!internalNote.trim() || !!workingAction}>
@@ -360,7 +360,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
       <section className="card stack">
         <div>
           <h3>감사 로그</h3>
-          <p>분류, 답변 생성, 상태 변경, 메모 저장 이력이 누적됩니다.</p>
+          <p>분류, 답변 생성, 상태 변경, 메모 저장 이력을 추적합니다.</p>
         </div>
         <div className="timeline">
           {claim.audit_logs?.map((log) => {

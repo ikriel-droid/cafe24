@@ -10,10 +10,10 @@ from app.models import Claim, ClaimStatus, Merchant
 from .oauth_client import Cafe24OAuthClient
 
 MOCK_WEBHOOK_LABELS: dict[str, tuple[str, str]] = {
-    "order.cancel.requested": ("주문 취소 요청", "고객이 주문 취소를 요청한 이벤트를 시뮬레이션합니다."),
-    "claim.exchange.requested": ("교환 요청", "고객이 교환 접수를 남긴 이벤트를 시뮬레이션합니다."),
-    "claim.return.requested": ("반품 요청", "고객이 반품 접수를 남긴 이벤트를 시뮬레이션합니다."),
-    "delivery.delay.reported": ("배송 지연 알림", "배송 지연 이슈가 webhook으로 유입된 상황을 시뮬레이션합니다."),
+    "order.cancel.requested": ("주문 취소 요청", "고객의 주문 취소 요청 이벤트를 로컬에 기록했습니다."),
+    "claim.exchange.requested": ("교환 요청", "고객의 교환 접수 이벤트를 로컬에 기록했습니다."),
+    "claim.return.requested": ("반품 요청", "고객의 반품 접수 이벤트를 로컬에 기록했습니다."),
+    "delivery.delay.reported": ("배송 지연 알림", "배송 지연 이슈가 webhook으로 유입된 상황을 로컬에 기록했습니다."),
 }
 
 
@@ -92,7 +92,7 @@ class Cafe24SyncService:
             return (
                 "attention",
                 "Webhook 확인 필요",
-                f"대기 중인 webhook이 {snapshot.pending_webhooks}건입니다. mock sync 또는 activity 흐름을 다시 확인해 주세요.",
+                f"대기 중인 webhook이 {snapshot.pending_webhooks}건입니다. Mock Sync 또는 activity 흐름을 다시 확인해 주세요.",
             )
 
         if pending_claims >= 8:
@@ -185,10 +185,10 @@ class Cafe24SyncService:
                 for event in snapshot.recent_events or []
             ],
             "notes": [
-                "Mock Sync uses seeded local claims and does not call Cafe24.",
-                "Mock webhook simulation lets you test pending webhook backlog without network access.",
-                "OAuth and webhook wiring stay as placeholders until live API work starts.",
-                "Use this screen to validate the future Cafe24 integration flow before real credentials arrive.",
+                "Mock Sync는 시드된 로컬 클레임만 사용하며 실제 Cafe24 API를 호출하지 않습니다.",
+                "Mock webhook 시뮬레이션으로 네트워크 없이도 pending webhook 적체를 점검할 수 있습니다.",
+                "OAuth와 webhook 실제 연결은 라이브 API 작업 전까지 placeholder로 유지됩니다.",
+                "실제 자격증명이 오기 전까지 이 화면에서 향후 Cafe24 연동 흐름을 검증할 수 있습니다.",
             ],
         }
 
@@ -208,8 +208,8 @@ class Cafe24SyncService:
                 occurred_at=now,
                 event_type="mock_sync",
                 status="success",
-                title="Cafe24 Mock Sync completed",
-                detail=f"{snapshot.synced_orders} orders and {snapshot.synced_claims} claims were refreshed locally.",
+                title="Cafe24 Mock Sync 완료",
+                detail=f"주문 {snapshot.synced_orders}건과 클레임 {snapshot.synced_claims}건을 로컬 기준으로 갱신했습니다.",
                 batch_id=snapshot.last_sync_batch_id,
             ),
         )
@@ -227,7 +227,7 @@ class Cafe24SyncService:
         snapshot = self._get_snapshot(merchant.id)
         title, description = MOCK_WEBHOOK_LABELS.get(
             event_type,
-            ("기타 Cafe24 webhook", "정의되지 않은 webhook 이벤트를 로컬 placeholder로 기록합니다."),
+            ("기타 Cafe24 webhook", "정의되지 않은 webhook 이벤트를 로컬 placeholder로 기록했습니다."),
         )
         snapshot.pending_webhooks += 1
         self._append_event(
@@ -251,7 +251,7 @@ class Cafe24SyncService:
         message: str,
         state: str | None = None,
     ) -> None:
-        title = "Cafe24 OAuth callback received" if result == "received" else "Cafe24 OAuth callback issue"
+        title = "Cafe24 OAuth callback 수신" if result == "received" else "Cafe24 OAuth callback 오류"
         detail = f"{message}{f' (state: {state})' if state else ''}"
         self._append_event(
             merchant_id,

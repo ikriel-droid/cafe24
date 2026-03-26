@@ -40,7 +40,7 @@ class MockAIProvider(AIProvider):
                 ClaimCategory.RETURN,
                 "return_request",
                 ClaimUrgency.MEDIUM,
-                0.9,
+                0.90,
                 "반품 또는 단순 변심 관련 문맥이 확인되어 반품 처리 문의로 보았습니다.",
             ),
             (
@@ -95,8 +95,7 @@ class MockAIProvider(AIProvider):
         policy: Policy,
         messages: Sequence[ClaimMessage],
     ) -> DraftReplyResult:
-        customer_name = claim.customer_name
-        greeting = f"{customer_name}님, 안녕하세요. ClaimMate AI 데모 상담 도우미입니다."
+        greeting = f"{claim.customer_name}님, 안녕하세요. ClaimMate AI 데모 상담 도우미입니다."
         order_line = f"주문번호 {claim.order_no} 건 확인했습니다."
 
         category_templates: dict[ClaimCategory, str] = {
@@ -155,4 +154,3 @@ class MockAIProvider(AIProvider):
             confidence=0.86,
             rationale="클레임 카테고리와 판매자 정책을 결합한 규칙 기반 응답 초안을 생성했습니다.",
         )
-
