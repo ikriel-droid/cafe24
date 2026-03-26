@@ -8,6 +8,35 @@ from app.db.session import reset_engine
 from app.integrations.cafe24.sync_service import Cafe24SyncService
 
 
+def test_claim_reply_send_can_keep_claim_open(monkeypatch) -> None:
+    temp_root = Path(".tmp") / "tests" / "send-reply-open"
+    if temp_root.exists():
+        shutil.rmtree(temp_root)
+    temp_root.mkdir(parents=True, exist_ok=True)
+
+    database_url = f"sqlite:///{temp_root.joinpath('claimmate-test.db').resolve().as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("SEED_DEMO_DATA", "true")
+    get_settings.cache_clear()
+    reset_engine()
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        client.post("/api/claims/2/draft-reply")
+        response = client.post(
+            "/api/claims/2/send-reply",
+            json={"reply_body": "manual reply body", "actor": "qa_operator", "mark_done": False},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "in_review"
+        assert payload["automation"]["reply_sent"] is True
+        assert payload["automation"]["reply_sent_by"] == "qa_operator"
+        assert payload["audit_logs"][0]["event_type"] == "reply_sent"
+        assert payload["audit_logs"][0]["payload_json"]["mark_done"] is False
+
+
 def test_reply_sent_filter_and_summary(monkeypatch) -> None:
     temp_root = Path(".tmp") / "tests" / "reply-sent-filter"
     if temp_root.exists():

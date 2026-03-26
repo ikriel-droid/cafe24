@@ -85,9 +85,9 @@ export function DashboardPage() {
       .slice(0, 4);
   }, [claims]);
 
-  const recentReplies = useMemo(() => {
+  const followUpAfterReply = useMemo(() => {
     return claims
-      .filter((claim) => claim.automation.reply_sent)
+      .filter((claim) => claim.automation.reply_sent && claim.status !== "done")
       .sort((left, right) => {
         const rightTime = right.automation.reply_sent_at ? new Date(right.automation.reply_sent_at).getTime() : 0;
         const leftTime = left.automation.reply_sent_at ? new Date(left.automation.reply_sent_at).getTime() : 0;
@@ -177,6 +177,11 @@ export function DashboardPage() {
                   발송 완료 보기
                 </Link>
               </div>
+            </div>
+            <div className="card">
+              <p>발송 후 후속 확인</p>
+              <div className="metric-value">{followUpAfterReply.length}</div>
+              <p className="metric-caption">답변은 보냈지만 아직 닫지 않은 클레임</p>
             </div>
             {summary.cafe24 ? (
               <div className="card">
@@ -270,12 +275,12 @@ export function DashboardPage() {
           <section className="grid cols-2">
             <div className="card stack">
               <div>
-                <h3>최근 답변 발송</h3>
-                <p>최근에 발송 처리까지 끝난 클레임을 빠르게 다시 확인할 수 있습니다.</p>
+                <h3>발송 후 후속 확인</h3>
+                <p>답변은 보냈지만 아직 완료 처리되지 않은 건을 다시 확인합니다.</p>
               </div>
-              {recentReplies.length > 0 ? (
+              {followUpAfterReply.length > 0 ? (
                 <div className="timeline">
-                  {recentReplies.map((claim) => (
+                  {followUpAfterReply.map((claim) => (
                     <Link key={claim.id} href={`/claims/${claim.id}`} className="timeline-item">
                       <div className="actions">
                         <strong>
@@ -295,7 +300,7 @@ export function DashboardPage() {
                   ))}
                 </div>
               ) : (
-                <div className="empty-state inline-state">아직 발송 처리된 클레임이 없습니다.</div>
+                <div className="empty-state inline-state">현재 발송 후 후속 확인이 필요한 클레임이 없습니다.</div>
               )}
             </div>
 
@@ -351,11 +356,11 @@ export function DashboardPage() {
               </Link>
               <Link href="/inbox?sort=priority&reply_sent=true" className="resource-link">
                 <strong>발송 완료 인박스 열기</strong>
-                <p>답변 발송 로그까지 남은 클레임만 다시 확인합니다.</p>
+                <p>답변 발송 로그까지 남은 클레임을 다시 확인합니다.</p>
               </Link>
-              <Link href="/integrations/cafe24" className="resource-link">
-                <strong>Cafe24 콘솔 열기</strong>
-                <p>Mock Sync, OAuth placeholder, activity 상태를 점검합니다.</p>
+              <Link href="/settings/policy" className="resource-link">
+                <strong>정책 수정</strong>
+                <p>교환/반품/환불 정책을 조정해서 답변 초안을 매장 정책에 맞춥니다.</p>
               </Link>
             </div>
           </section>

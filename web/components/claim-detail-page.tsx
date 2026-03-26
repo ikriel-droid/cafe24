@@ -52,6 +52,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
   const [internalNote, setInternalNote] = useState("");
   const [workingAction, setWorkingAction] = useState<string | null>(null);
   const [replyDraft, setReplyDraft] = useState("");
+  const [closeAfterSend, setCloseAfterSend] = useState(true);
 
   async function loadClaim() {
     setLoading(true);
@@ -138,15 +139,19 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
     try {
       const payload =
         isReplyEdited || !hasGeneratedReply
-          ? { reply_body: replyDraft.trim(), actor: "web_operator", mark_done: true }
-          : { actor: "web_operator", mark_done: true };
+          ? { reply_body: replyDraft.trim(), actor: "web_operator", mark_done: closeAfterSend }
+          : { actor: "web_operator", mark_done: closeAfterSend };
       const data = await apiFetch<Claim>(`/api/claims/${claimId}/send-reply`, {
         method: "POST",
         body: JSON.stringify(payload),
       });
       setClaim(data);
       setError(null);
-      setNotice("답변을 발송 처리했고 클레임을 완료 상태로 반영했습니다.");
+      setNotice(
+        closeAfterSend
+          ? "답변을 발송 처리했고 클레임을 완료 상태로 반영했습니다."
+          : "답변을 발송 처리했고 클레임은 현재 상태로 유지했습니다.",
+      );
     } catch (actionError) {
       setNotice(null);
       setError(actionError instanceof Error ? actionError.message : "답변 발송 처리에 실패했습니다.");
@@ -405,8 +410,19 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
           />
           <p className="muted">{latestReply?.rationale ?? ""}</p>
           <div className="actions">
+            <label className="inline-checkbox">
+              <input
+                type="checkbox"
+                checked={closeAfterSend}
+                onChange={(event) => setCloseAfterSend(event.target.checked)}
+                disabled={!!workingAction}
+              />
+              <span>발송 후 완료 처리</span>
+            </label>
+          </div>
+          <div className="actions">
             <button className="button" onClick={handleSendReply} disabled={!replyDraft.trim() || !!workingAction}>
-              {claim.automation.reply_sent ? "Resend Reply" : "Send Reply + Done"}
+              {claim.automation.reply_sent ? "Resend Reply" : closeAfterSend ? "Send Reply + Done" : "Send Reply"}
             </button>
             <button className="button ghost" onClick={handleCopyReply} disabled={!replyDraft.trim() || !!workingAction}>
               Copy Reply

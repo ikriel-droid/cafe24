@@ -299,6 +299,19 @@ tbody tr:hover {
   gap: 10px;
 }
 
+.inline-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.inline-checkbox input {
+  width: 16px;
+  height: 16px;
+}
+
 .button {
   padding: 12px 16px;
   border: 0;
