@@ -20,7 +20,7 @@ from app.models import (
     Policy,
     SuggestedAction,
 )
-from app.schemas import ClaimNoteCreate, DashboardSummary, PolicyUpdate
+from app.schemas import ClaimNoteCreate, ClaimReplySend, DashboardSummary, PolicyUpdate
 
 
 MOCK_WEBHOOK_RULES: dict[str, dict[str, object]] = {
@@ -227,6 +227,48 @@ def add_claim_note(session: Session, claim_id: int, payload: ClaimNoteCreate) ->
         actor=payload.actor,
         event_type="internal_note_added",
         payload_json={"note": note_text},
+    )
+    session.commit()
+    session.expire_all()
+    return get_claim(session, claim_id)
+
+
+def send_claim_reply(session: Session, claim_id: int, payload: ClaimReplySend) -> Claim:
+    claim = get_claim(session, claim_id)
+    latest_reply = next(
+        (action for action in claim.suggested_actions if action.action_type == "draft_reply"),
+        None,
+    )
+
+    reply_body = payload.reply_body.strip() if payload.reply_body else ""
+    if not reply_body and latest_reply is not None:
+        reply_body = latest_reply.draft_reply.strip()
+    if not reply_body:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Reply body cannot be empty.")
+
+    session.add(
+        ClaimMessage(
+            claim_id=claim.id,
+            role="merchant",
+            body=reply_body,
+        )
+    )
+
+    if payload.mark_done:
+        claim.status = ClaimStatus.DONE
+        session.add(claim)
+
+    record_audit_log(
+        session,
+        claim_id=claim.id,
+        actor=payload.actor,
+        event_type="reply_sent",
+        payload_json={
+            "mark_done": payload.mark_done,
+            "status": claim.status.value,
+            "source": "manual_edit" if payload.reply_body else "latest_draft",
+            "reply_preview": reply_body[:140],
+        },
     )
     session.commit()
     session.expire_all()

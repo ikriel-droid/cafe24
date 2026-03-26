@@ -8,6 +8,43 @@ from app.db.session import reset_engine
 from app.integrations.cafe24.sync_service import Cafe24SyncService
 
 
+def test_claim_reply_send_records_message_and_completes_claim(monkeypatch) -> None:
+    temp_root = Path(".tmp") / "tests" / "send-reply"
+    if temp_root.exists():
+        shutil.rmtree(temp_root)
+    temp_root.mkdir(parents=True, exist_ok=True)
+
+    database_url = f"sqlite:///{temp_root.joinpath('claimmate-test.db').resolve().as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("SEED_DEMO_DATA", "true")
+    get_settings.cache_clear()
+    reset_engine()
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        draft_response = client.post("/api/claims/1/draft-reply")
+        assert draft_response.status_code == 200
+
+        send_response = client.post(
+            "/api/claims/1/send-reply",
+            json={
+                "reply_body": "안녕하세요. 교환 절차를 안내드리겠습니다.",
+                "actor": "qa_operator",
+                "mark_done": True,
+            },
+        )
+        assert send_response.status_code == 200
+        payload = send_response.json()
+        assert payload["status"] == "done"
+        assert payload["messages"][-1]["role"] == "merchant"
+        assert payload["messages"][-1]["body"] == "안녕하세요. 교환 절차를 안내드리겠습니다."
+        assert payload["audit_logs"][0]["event_type"] == "reply_sent"
+        assert payload["audit_logs"][0]["actor"] == "qa_operator"
+        assert payload["audit_logs"][0]["payload_json"]["mark_done"] is True
+        assert payload["audit_logs"][0]["payload_json"]["source"] == "manual_edit"
+
+
 def test_claims_endpoint_bootstraps_database(monkeypatch) -> None:
     temp_root = Path(".tmp") / "tests" / "health"
     if temp_root.exists():

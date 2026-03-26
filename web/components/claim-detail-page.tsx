@@ -127,6 +127,34 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
     }
   }
 
+  async function handleSendReply() {
+    if (!replyDraft.trim()) {
+      setNotice(null);
+      setError("발송할 답변 초안이 없습니다. 먼저 초안을 생성하거나 내용을 입력해 주세요.");
+      return;
+    }
+
+    setWorkingAction("send-reply");
+    try {
+      const payload =
+        isReplyEdited || !hasGeneratedReply
+          ? { reply_body: replyDraft.trim(), actor: "web_operator", mark_done: true }
+          : { actor: "web_operator", mark_done: true };
+      const data = await apiFetch<Claim>(`/api/claims/${claimId}/send-reply`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setClaim(data);
+      setError(null);
+      setNotice("답변을 발송 처리했고 클레임을 완료 상태로 반영했습니다.");
+    } catch (actionError) {
+      setNotice(null);
+      setError(actionError instanceof Error ? actionError.message : "답변 발송 처리에 실패했습니다.");
+    } finally {
+      setWorkingAction(null);
+    }
+  }
+
   async function handleCopyReply() {
     if (!replyDraft.trim()) {
       setNotice(null);
@@ -248,7 +276,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
         <div className="card stack">
           <div>
             <h3>액션</h3>
-            <p>상태 변경과 AI 재실행을 이 화면에서 바로 처리합니다.</p>
+            <p>상태 변경과 AI 재실행, 답변 발송 처리를 이 화면에서 바로 진행합니다.</p>
           </div>
           <div className="actions">
             <button className="button" onClick={() => handleStatusChange("approved")} disabled={!!workingAction}>
@@ -348,7 +376,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
         <div className="card stack">
           <div>
             <h3>추천 답변</h3>
-            <p>판매자 정책을 반영한 답변 초안입니다.</p>
+            <p>판매자 정책을 반영한 답변 초안입니다. 발송 처리 시 타임라인과 감사 로그에 같이 남습니다.</p>
           </div>
           <div className="summary-list">
             <div className="summary-row">
@@ -368,10 +396,17 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
           />
           <p className="muted">{latestReply?.rationale ?? ""}</p>
           <div className="actions">
+            <button className="button" onClick={handleSendReply} disabled={!replyDraft.trim() || !!workingAction}>
+              Send Reply + Done
+            </button>
             <button className="button ghost" onClick={handleCopyReply} disabled={!replyDraft.trim() || !!workingAction}>
               Copy Reply
             </button>
-            <button className="button secondary" onClick={handleResetReply} disabled={!hasGeneratedReply || !isReplyEdited || !!workingAction}>
+            <button
+              className="button secondary"
+              onClick={handleResetReply}
+              disabled={!hasGeneratedReply || !isReplyEdited || !!workingAction}
+            >
               Reset To AI Draft
             </button>
           </div>
@@ -399,7 +434,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
       <section className="card stack">
         <div>
           <h3>감사 로그</h3>
-          <p>분류, 답변 생성, 상태 변경, 메모 저장 이력을 추적합니다.</p>
+          <p>분류, 답변 생성, 발송 처리, 상태 변경, 메모 저장 이력을 추적합니다.</p>
         </div>
         <div className="timeline">
           {claim.audit_logs?.map((log) => {

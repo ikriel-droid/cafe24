@@ -15,6 +15,7 @@ from app.schemas import (
     ClaimDetail,
     ClaimListItem,
     ClaimNoteCreate,
+    ClaimReplySend,
     ClaimStatusUpdate,
     ClassificationResponse,
     DashboardCafe24Overview,
@@ -34,6 +35,7 @@ from app.services.claim_service import (
     get_dashboard_summary,
     get_policy,
     list_claims,
+    send_claim_reply,
     update_claim_status,
     update_policy,
 )
@@ -130,6 +132,16 @@ def claims_add_note(
     db: Session = Depends(get_db),
 ) -> ClaimDetail:
     claim = add_claim_note(db, claim_id, payload)
+    return ClaimDetail.model_validate(build_claim_detail_payload(claim))
+
+
+@router.post("/claims/{claim_id}/send-reply", response_model=ClaimDetail)
+def claims_send_reply(
+    claim_id: int,
+    payload: ClaimReplySend,
+    db: Session = Depends(get_db),
+) -> ClaimDetail:
+    claim = send_claim_reply(db, claim_id, payload)
     return ClaimDetail.model_validate(build_claim_detail_payload(claim))
 
 

@@ -77,6 +77,12 @@ class ClaimNoteCreate(BaseModel):
     actor: str = Field(default="merchant_operator")
 
 
+class ClaimReplySend(BaseModel):
+    reply_body: str | None = Field(default=None, max_length=4000)
+    actor: str = Field(default="merchant_operator")
+    mark_done: bool = Field(default=True)
+
+
 class PolicyRead(ORMModel):
     id: int
     merchant_id: int
