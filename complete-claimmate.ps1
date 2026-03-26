@@ -126,7 +126,7 @@ function Get-RoadmapLines {
     "2. docker: start postgres/redis when Docker is available",
     "3. test: run backend pytest suite",
     "4. build: run frontend production build",
-    "5. start: launch the local app at http://127.0.0.1:8000/inbox/",
+    "5. start: launch the local app at http://127.0.0.1:8000/dashboard/",
     "6. smoke: verify health, seeded claims, policy, mock sync, classify, and draft reply",
     "7. report: write a local completion report to run-artifacts/latest-completion-report.md",
     "",
@@ -244,7 +244,7 @@ function Invoke-BuildStage {
 function Invoke-StartStage {
   Write-StageHeader "start"
   Invoke-CheckedCommand -WorkingDirectory $root -FilePath "powershell.exe" -Arguments @("-ExecutionPolicy", "Bypass", "-File", $startScript) | Out-Host
-  return "app started at http://127.0.0.1:8000/inbox/"
+  return "app started at http://127.0.0.1:8000/dashboard/"
 }
 
 function Invoke-SmokeStage {
@@ -280,7 +280,7 @@ function Invoke-SmokeStage {
   Write-Host ("mock sync result: {0}" -f $sync.last_sync_result)
   Write-Host ("classify: claim {0} -> {1}/{2}" -f $classification.claim_id, $classification.category, $classification.urgency)
   Write-Host ("draft reply confidence: {0}" -f $draft.confidence)
-  Write-Host "web: http://127.0.0.1:8000/inbox/"
+  Write-Host "web: http://127.0.0.1:8000/dashboard/"
 
   $script:SmokeSummary = [pscustomobject]@{
     checkedAt               = (Get-Date).ToString("s")
@@ -295,7 +295,7 @@ function Invoke-SmokeStage {
     classificationCategory  = $classification.category
     classificationUrgency   = $classification.urgency
     draftReplyConfidence    = $draft.confidence
-    appUrl                  = "http://127.0.0.1:8000/inbox/"
+    appUrl                  = "http://127.0.0.1:8000/dashboard/"
     healthUrl               = "http://127.0.0.1:8000/health"
   }
 
@@ -353,7 +353,7 @@ function Invoke-ReportStage {
     ""
     "- Generated at: $($timestamp.ToString('yyyy-MM-dd HH:mm:ss zzz'))"
     "- Repo: $root"
-    "- App URL: http://127.0.0.1:8000/inbox/"
+    "- App URL: http://127.0.0.1:8000/dashboard/"
     "- Health URL: http://127.0.0.1:8000/health"
     "- Docker note: $($script:DockerStageNote)"
     ""
@@ -371,7 +371,7 @@ function Invoke-ReportStage {
   $reportObject = [pscustomobject]@{
     generated_at = $timestamp.ToString("o")
     repo_root = $root
-    app_url = "http://127.0.0.1:8000/inbox/"
+    app_url = "http://127.0.0.1:8000/dashboard/"
     health_url = "http://127.0.0.1:8000/health"
     docker_note = $script:DockerStageNote
     stages = $script:StageResults

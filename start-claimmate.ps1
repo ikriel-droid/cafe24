@@ -80,12 +80,12 @@ $apiProcess = Start-Process `
   -PassThru
 
 $apiReady = Wait-ForHttp -Url "http://127.0.0.1:8000/health"
-$webReady = Wait-ForHttp -Url "http://127.0.0.1:8000/inbox/"
+$webReady = Wait-ForHttp -Url "http://127.0.0.1:8000/dashboard/"
 
 Write-Host "ClaimMate AI launch requested."
 Write-Host "API PID: $($apiProcess.Id)"
 Write-Host "API:  http://127.0.0.1:8000/health"
-Write-Host "Web:  http://127.0.0.1:8000/inbox/"
+Write-Host "Web:  http://127.0.0.1:8000/dashboard/"
 
 if (-not $apiReady) {
   throw "Backend did not become ready. Check $apiErrLog"

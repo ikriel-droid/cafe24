@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const links = [
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/inbox", label: "Inbox" },
   { href: "/integrations/cafe24", label: "Cafe24" },
   { href: "/settings/policy", label: "Policy" },
@@ -17,7 +18,7 @@ export function Navigation() {
       <div className="brand">
         <span className="brand-eyebrow">Cafe24 Ops</span>
         <h1>ClaimMate AI</h1>
-        <p>취소, 교환, 반품, 환불, 배송 문의를 한 곳에서 빠르게 정리하는 로컬 MVP입니다.</p>
+        <p>취소, 교환, 반품, 환불, 배송 문의를 한 화면에서 빠르게 정리하는 로컬 MVP입니다.</p>
       </div>
 
       <nav className="nav-links">

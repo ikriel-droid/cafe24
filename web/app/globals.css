@@ -423,16 +423,22 @@ tbody tr:hover {
   background: #fffaf4;
 }
 
-.mini-activity-list {
+.resource-links {
   display: grid;
   gap: 12px;
 }
 
-.mini-activity-item {
-  padding: 14px 16px;
+.resource-link {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
   border-radius: 18px;
   border: 1px solid #efe3d2;
   background: #fffaf4;
+}
+
+.resource-link strong {
+  color: var(--text);
 }
 
 .empty-state,

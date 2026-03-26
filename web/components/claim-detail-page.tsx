@@ -123,14 +123,14 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
   async function handleCopyReply() {
     if (!replyDraft.trim()) {
       setNotice(null);
-      setError("복사할 답변 초안이 없습니다. 먼저 Re-generate Reply를 실행하거나 내용을 입력하세요.");
+      setError("복사할 답변 초안이 없습니다. 먼저 Re-generate Reply를 실행하거나 내용을 입력해 주세요.");
       return;
     }
 
     try {
       await copyText(replyDraft.trim());
       setError(null);
-      setNotice("편집한 답변 초안을 클립보드에 복사했습니다.");
+      setNotice("편집 중인 답변 초안을 클립보드에 복사했습니다.");
     } catch (copyError) {
       setNotice(null);
       setError(copyError instanceof Error ? copyError.message : "답변 초안 복사에 실패했습니다.");
@@ -140,14 +140,14 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
   function handleResetReply() {
     setReplyDraft(latestReply?.draft_reply ?? "");
     setError(null);
-    setNotice("AI가 생성한 초안으로 되돌렸습니다.");
+    setNotice("AI가 생성한 원본 초안으로 되돌렸습니다.");
   }
 
   async function handleAddInternalNote() {
     const trimmedNote = internalNote.trim();
     if (!trimmedNote) {
       setNotice(null);
-      setError("내부 메모 내용을 입력하세요.");
+      setError("내부 메모 내용을 입력해 주세요.");
       return;
     }
 
@@ -198,7 +198,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
             ← Inbox
           </Link>
           <h2>{claim.order_no}</h2>
-          <p>{claim.customer_name} 고객의 문의를 요약, 분류, 답변 초안으로 한 화면에서 확인합니다.</p>
+          <p>{claim.customer_name} 고객 문의를 요약, 분류, 답변 초안 기준으로 확인합니다.</p>
         </div>
       </header>
 
@@ -241,7 +241,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
         <div className="card stack">
           <div>
             <h3>액션</h3>
-            <p>상태 변경과 AI 재실행을 한 번에 처리합니다.</p>
+            <p>상태 변경과 AI 재실행을 이 화면에서 바로 처리합니다.</p>
           </div>
           <div className="actions">
             <button className="button" onClick={() => handleStatusChange("approved")} disabled={!!workingAction}>
@@ -269,7 +269,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
         <div className="card stack">
           <div>
             <h3>고객 메시지 타임라인</h3>
-            <p>실제 상담 흐름을 기준으로 Mock AI가 분류와 답변 초안을 만듭니다.</p>
+            <p>고객과 운영자 메시지를 시간순으로 확인합니다.</p>
           </div>
           <div className="timeline">
             {claim.messages?.map((message) => (
@@ -286,7 +286,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
           <div className="card stack">
             <div>
               <h3>AI 분류</h3>
-              <p>최근 분류 결과와 근거입니다.</p>
+              <p>가장 최근 분류 결과와 근거입니다.</p>
             </div>
             <div className="summary-list">
               <div className="summary-row">
@@ -302,13 +302,13 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
                 <strong>{latestClassification ? `${Math.round(latestClassification.confidence * 100)}%` : "-"}</strong>
               </div>
             </div>
-            <p>{latestClassification?.rationale ?? "아직 분류 이력이 없습니다. Re-run Classify를 실행하세요."}</p>
+            <p>{latestClassification?.rationale ?? "아직 분류 이력이 없습니다. Re-run Classify를 실행해 주세요."}</p>
           </div>
 
           <div className="card stack">
             <div>
               <h3>추천 답변</h3>
-              <p>판매자 정책을 반영한 한국어 초안입니다.</p>
+              <p>판매자 정책을 반영한 응대 초안입니다.</p>
             </div>
             <div className="summary-list">
               <div className="summary-row">
@@ -324,7 +324,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
               className="textarea reply-editor"
               value={replyDraft}
               onChange={(event) => setReplyDraft(event.target.value)}
-              placeholder="아직 답변 초안이 없습니다. Re-generate Reply를 실행하세요."
+              placeholder="아직 답변 초안이 없습니다. Re-generate Reply를 실행해 주세요."
             />
             <p className="muted">{latestReply?.rationale ?? ""}</p>
             <div className="actions">
@@ -342,7 +342,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
       <section className="card stack">
         <div>
           <h3>내부 처리 메모</h3>
-          <p>고객에게 보이지 않는 처리 메모를 남겨 다음 담당자와 맥락을 공유합니다.</p>
+          <p>고객에게 보이지 않는 운영 메모를 남겨 다음 담당자와 공유합니다.</p>
         </div>
         <textarea
           className="textarea reply-editor"
@@ -360,7 +360,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
       <section className="card stack">
         <div>
           <h3>감사 로그</h3>
-          <p>분류, 답변 생성, 상태 변경 이력이 저장됩니다.</p>
+          <p>분류, 답변 생성, 상태 변경, 메모 저장 이력이 누적됩니다.</p>
         </div>
         <div className="timeline">
           {claim.audit_logs?.map((log) => {

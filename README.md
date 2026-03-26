@@ -57,7 +57,7 @@ docker compose up --build
 
 This starts:
 
-- web: [http://127.0.0.1:3000/inbox](http://127.0.0.1:3000/inbox)
+- web: [http://127.0.0.1:3000/dashboard](http://127.0.0.1:3000/dashboard)
 - api: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
 - postgres: `127.0.0.1:5432`
 - redis: `127.0.0.1:6379`
@@ -99,7 +99,8 @@ npm.cmd install
 npm.cmd run dev
 ```
 
-Open [http://127.0.0.1:3000/inbox](http://127.0.0.1:3000/inbox).
+Open [http://127.0.0.1:3000/dashboard](http://127.0.0.1:3000/dashboard).
+The root route redirects to `/dashboard`, and `/inbox` remains the working queue view.
 
 The Cafe24 placeholder console is available at `/integrations/cafe24` and supports offline Mock Sync plus simulated OAuth callback testing.
 
@@ -111,7 +112,7 @@ If you want one command that starts the backend and serves the exported frontend
 .\start-claimmate.ps1
 ```
 
-Then open [http://127.0.0.1:8000/inbox/](http://127.0.0.1:8000/inbox/).
+Then open [http://127.0.0.1:8000/dashboard/](http://127.0.0.1:8000/dashboard/).
 
 To stop the local listeners later:
 
@@ -139,7 +140,7 @@ That default `all` flow runs:
 - `docker`: starts `postgres` and `redis` when Docker is available, otherwise falls back to SQLite
 - `test`: runs backend pytest
 - `build`: runs the frontend production build
-- `start`: launches the app locally at [http://127.0.0.1:8000/inbox/](http://127.0.0.1:8000/inbox/)
+- `start`: launches the app locally at [http://127.0.0.1:8000/dashboard/](http://127.0.0.1:8000/dashboard/)
 - `smoke`: checks health, seeded claims, policy, mock sync, classify, and draft reply
 - `roadmap`: prints the remaining manual blockers to reach a production-complete ClaimMate AI
 - `report`: writes `run-artifacts/latest-completion-report.md` and `.json` with the run result, smoke summary, and remaining manual blockers

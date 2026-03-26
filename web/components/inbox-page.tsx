@@ -102,30 +102,30 @@ function buildCafe24Overview(status: Cafe24IntegrationStatus): DashboardCafe24Ov
   };
 }
 
-function compareClaims(a: Claim, b: Claim, sortBy: SortOption) {
+function compareClaims(left: Claim, right: Claim, sortBy: SortOption) {
   if (sortBy === "customer") {
-    return a.customer_name.localeCompare(b.customer_name, "ko-KR");
+    return left.customer_name.localeCompare(right.customer_name, "ko-KR");
   }
 
   if (sortBy === "oldest") {
-    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
   }
 
   if (sortBy === "newest") {
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
   }
 
-  const statusDifference = statusRank[b.status] - statusRank[a.status];
+  const statusDifference = statusRank[right.status] - statusRank[left.status];
   if (statusDifference !== 0) {
     return statusDifference;
   }
 
-  const urgencyDifference = urgencyRank[b.urgency] - urgencyRank[a.urgency];
+  const urgencyDifference = urgencyRank[right.urgency] - urgencyRank[left.urgency];
   if (urgencyDifference !== 0) {
     return urgencyDifference;
   }
 
-  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
 }
 
 export function InboxPage() {
@@ -201,7 +201,7 @@ export function InboxPage() {
           } else {
             setSummary(summaryResult.value);
             setSyncStatus(null);
-            setSyncError("Cafe24 sync 상태를 잠시 후 다시 확인해 주세요.");
+            setSyncError("Cafe24 상태를 일시적으로 불러오지 못했습니다. 잠시 뒤 다시 확인해 주세요.");
           }
         }
       } catch (loadError) {
@@ -240,6 +240,7 @@ export function InboxPage() {
   async function handleRunMockSync() {
     setSyncWorking(true);
     setSyncError(null);
+
     try {
       const data = await apiFetch<Cafe24IntegrationStatus>("/api/integrations/cafe24/mock-sync", {
         method: "POST",
@@ -258,7 +259,12 @@ export function InboxPage() {
       <header className="page-header">
         <div>
           <h2>Claim Inbox</h2>
-          <p>카페24 운영자가 처리할 클레임을 카테고리, 상태, 긴급도 기준으로 빠르게 정리합니다.</p>
+          <p>카테고리, 상태, 긴급도 기준으로 클레임을 빠르게 정리하고 상세 화면으로 이어집니다.</p>
+        </div>
+        <div className="actions">
+          <Link href="/dashboard" className="button secondary">
+            대시보드
+          </Link>
         </div>
       </header>
 
@@ -267,7 +273,7 @@ export function InboxPage() {
           <div className="page-header compact-header">
             <div>
               <h3>Cafe24 Mock Sync</h3>
-              <p>인박스에서 바로 연동 상태를 확인하고 필요하면 mock sync를 다시 실행할 수 있습니다.</p>
+              <p>인박스에서 바로 연동 상태를 확인하고 필요하면 Mock Sync를 다시 실행할 수 있습니다.</p>
             </div>
             <div className="actions">
               <Badge tone={toneForSyncResult(syncStatus)}>
@@ -308,7 +314,7 @@ export function InboxPage() {
             </div>
             <p>{syncStatus.health_detail}</p>
             <div className="actions">
-              <span className="muted">Next</span>
+              <span className="muted">다음 작업</span>
               {syncStatus.next_action_type === "mock_sync" ? (
                 <button className="button secondary" type="button" onClick={handleRunMockSync} disabled={syncWorking}>
                   {syncStatus.next_action_label}
@@ -400,7 +406,7 @@ export function InboxPage() {
             <input
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
-              placeholder="주문번호, 고객명, 상품명, 문의 내용을 검색하세요"
+              placeholder="주문번호, 고객명, 상품명, 문의 내용을 검색해 보세요"
             />
           </div>
           <div className="field">

@@ -80,7 +80,7 @@ export function PolicySettingsPage() {
         method: "PUT",
         body: JSON.stringify(form),
       });
-      setMessage("정책이 저장되었습니다.");
+      setMessage("정책을 저장했습니다.");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "정책 저장에 실패했습니다.");
     } finally {
@@ -93,7 +93,7 @@ export function PolicySettingsPage() {
       <header className="page-header">
         <div>
           <h2>Merchant Policy</h2>
-          <p>Mock AI 답변이 참고하는 교환/반품/환불 정책을 수정할 수 있습니다.</p>
+          <p>AI 답변 초안이 참고하는 교환, 반품, 환불 정책을 이 화면에서 수정합니다.</p>
         </div>
       </header>
 
