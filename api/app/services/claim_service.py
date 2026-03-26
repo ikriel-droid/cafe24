@@ -175,61 +175,6 @@ def add_claim_note(session: Session, claim_id: int, payload: ClaimNoteCreate) ->
     return get_claim(session, claim_id)
 
 
-def apply_mock_webhook_to_claim(
-    session: Session,
-    merchant_id: int,
-    event_type: str,
-    order_no: str | None = None,
-) -> Claim | None:
-    if not order_no:
-        return None
-
-    rule = MOCK_WEBHOOK_RULES.get(event_type)
-    if rule is None:
-        return None
-
-    query = select(Claim).where(Claim.merchant_id == merchant_id, Claim.order_no == order_no)
-    claim = session.scalar(query)
-    if claim is None:
-        return None
-
-    previous_category = claim.category.value
-    previous_status = claim.status.value
-    previous_urgency = claim.urgency.value
-
-    claim.category = rule["category"]
-    claim.status = rule["status"]
-    claim.urgency = rule["urgency"]
-
-    session.add(
-        ClaimMessage(
-            claim_id=claim.id,
-            role="system",
-            body=f"{rule['message']} 주문번호 {claim.order_no} 기준으로 운영 검토가 필요합니다.",
-        )
-    )
-    record_audit_log(
-        session,
-        claim_id=claim.id,
-        actor="cafe24_mock_webhook",
-        event_type="cafe24_mock_webhook_received",
-        payload_json={
-            "event_type": event_type,
-            "order_no": claim.order_no,
-            "previous_category": previous_category,
-            "previous_status": previous_status,
-            "previous_urgency": previous_urgency,
-            "next_category": claim.category.value,
-            "next_status": claim.status.value,
-            "next_urgency": claim.urgency.value,
-        },
-    )
-    session.add(claim)
-    session.commit()
-    session.expire_all()
-    return get_claim(session, claim.id)
-
-
 def classify_claim(session: Session, claim_id: int) -> ClassificationResult:
     claim = get_claim(session, claim_id)
     provider = get_ai_provider()
@@ -288,6 +233,79 @@ def generate_draft_reply(session: Session, claim_id: int) -> DraftReplyResult:
     )
     session.commit()
     return result
+
+
+def apply_mock_webhook_to_claim(
+    session: Session,
+    merchant_id: int,
+    event_type: str,
+    order_no: str | None = None,
+) -> Claim | None:
+    if not order_no:
+        return None
+
+    rule = MOCK_WEBHOOK_RULES.get(event_type)
+    if rule is None:
+        return None
+
+    query = select(Claim).where(Claim.merchant_id == merchant_id, Claim.order_no == order_no)
+    claim = session.scalar(query)
+    if claim is None:
+        return None
+
+    previous_category = claim.category.value
+    previous_status = claim.status.value
+    previous_urgency = claim.urgency.value
+
+    claim.category = rule["category"]
+    claim.status = rule["status"]
+    claim.urgency = rule["urgency"]
+
+    session.add(
+        ClaimMessage(
+            claim_id=claim.id,
+            role="system",
+            body=f"{rule['message']} 주문번호 {claim.order_no} 기준으로 운영 검토가 필요합니다.",
+        )
+    )
+    record_audit_log(
+        session,
+        claim_id=claim.id,
+        actor="cafe24_mock_webhook",
+        event_type="cafe24_mock_webhook_received",
+        payload_json={
+            "event_type": event_type,
+            "order_no": claim.order_no,
+            "previous_category": previous_category,
+            "previous_status": previous_status,
+            "previous_urgency": previous_urgency,
+            "next_category": claim.category.value,
+            "next_status": claim.status.value,
+            "next_urgency": claim.urgency.value,
+        },
+    )
+    session.add(claim)
+    session.commit()
+
+    classification = classify_claim(session, claim.id)
+    draft_reply = generate_draft_reply(session, claim.id)
+
+    record_audit_log(
+        session,
+        claim_id=claim.id,
+        actor="cafe24_mock_webhook",
+        event_type="cafe24_mock_webhook_auto_triaged",
+        payload_json={
+            "category": classification.category.value,
+            "ai_label": classification.label,
+            "urgency": classification.urgency.value,
+            "classification_confidence": classification.confidence,
+            "draft_confidence": draft_reply.confidence,
+        },
+    )
+    session.commit()
+    session.expire_all()
+    return get_claim(session, claim.id)
 
 
 def get_dashboard_summary(

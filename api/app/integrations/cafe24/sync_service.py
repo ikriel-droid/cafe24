@@ -223,12 +223,16 @@ class Cafe24SyncService:
         event_type: str,
         order_no: str | None = None,
         claim_id: int | None = None,
+        automation_summary: str | None = None,
     ) -> dict[str, object]:
         snapshot = self._get_snapshot(merchant.id)
         title, description = MOCK_WEBHOOK_LABELS.get(
             event_type,
             ("기타 Cafe24 webhook", "정의되지 않은 webhook 이벤트를 로컬 placeholder로 기록했습니다."),
         )
+        detail_suffix = f" 주문번호: {order_no}." if order_no else ""
+        if automation_summary:
+            detail_suffix += f" {automation_summary}."
         snapshot.pending_webhooks += 1
         self._append_event(
             merchant.id,
@@ -237,7 +241,7 @@ class Cafe24SyncService:
                 event_type="mock_webhook",
                 status="received",
                 title=f"{title} webhook received",
-                detail=f"{description}{f' 주문번호: {order_no}.' if order_no else ''}",
+                detail=f"{description}{detail_suffix}",
                 claim_id=claim_id,
                 order_no=order_no,
             ),

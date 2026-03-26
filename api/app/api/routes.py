@@ -181,6 +181,19 @@ def cafe24_mock_webhook(
         event_type=payload.event_type,
         order_no=payload.order_no,
     )
+    automation_summary: str | None = None
+    if affected_claim is not None:
+        latest_reply = next(
+            (action for action in affected_claim.suggested_actions if action.action_type == "draft_reply"),
+            None,
+        )
+        summary_parts: list[str] = []
+        if affected_claim.ai_label:
+            summary_parts.append(f"AI 분류: {affected_claim.ai_label} ({affected_claim.category.value})")
+        if latest_reply is not None:
+            summary_parts.append("답변 초안 생성 완료")
+        if summary_parts:
+            automation_summary = " / ".join(summary_parts)
     claims = list_claims(db, merchant_id=merchant.id)
     service = build_cafe24_service(settings)
     return Cafe24IntegrationStatus.model_validate(
@@ -191,6 +204,7 @@ def cafe24_mock_webhook(
             event_type=payload.event_type,
             order_no=payload.order_no,
             claim_id=affected_claim.id if affected_claim else None,
+            automation_summary=automation_summary,
         )
     )
 
