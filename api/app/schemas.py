@@ -40,6 +40,9 @@ class ClaimAutomationRead(BaseModel):
     auto_triaged: bool
     auto_triaged_at: datetime | None
     reply_ready: bool
+    reply_sent: bool
+    reply_sent_at: datetime | None
+    reply_sent_by: str | None
     classification_confidence: float | None
     draft_reply_confidence: float | None
     source_event: str | None
@@ -188,5 +191,6 @@ class DashboardSummary(BaseModel):
     high_urgency_claims: int
     auto_triaged_claims: int
     reply_ready_claims: int
+    reply_sent_claims: int
     by_category: dict[str, int]
     cafe24: DashboardCafe24Overview | None = None

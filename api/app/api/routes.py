@@ -96,6 +96,7 @@ def claims_index(
     q: str | None = Query(default=None),
     auto_triaged: bool | None = Query(default=None),
     reply_ready: bool | None = Query(default=None),
+    reply_sent: bool | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> list[ClaimListItem]:
     claims = list_claims(
@@ -106,6 +107,7 @@ def claims_index(
         search_text=q,
         auto_triaged=auto_triaged,
         reply_ready=reply_ready,
+        reply_sent=reply_sent,
     )
     return [ClaimListItem.model_validate(build_claim_base_payload(claim)) for claim in claims]
 
@@ -295,6 +297,7 @@ def dashboard_summary(
     q: str | None = Query(default=None),
     auto_triaged: bool | None = Query(default=None),
     reply_ready: bool | None = Query(default=None),
+    reply_sent: bool | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> DashboardSummary:
     summary = get_dashboard_summary(
@@ -305,6 +308,7 @@ def dashboard_summary(
         search_text=q,
         auto_triaged=auto_triaged,
         reply_ready=reply_ready,
+        reply_sent=reply_sent,
     )
     settings = get_settings()
     merchant = get_default_merchant(db, merchant_id)

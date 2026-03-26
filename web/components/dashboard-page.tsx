@@ -78,9 +78,21 @@ export function DashboardPage() {
         (claim) =>
           (claim.status === "open" || claim.status === "in_review") &&
           claim.automation.auto_triaged &&
-          claim.automation.reply_ready,
+          claim.automation.reply_ready &&
+          !claim.automation.reply_sent,
       )
       .sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime())
+      .slice(0, 4);
+  }, [claims]);
+
+  const recentReplies = useMemo(() => {
+    return claims
+      .filter((claim) => claim.automation.reply_sent)
+      .sort((left, right) => {
+        const rightTime = right.automation.reply_sent_at ? new Date(right.automation.reply_sent_at).getTime() : 0;
+        const leftTime = left.automation.reply_sent_at ? new Date(left.automation.reply_sent_at).getTime() : 0;
+        return rightTime - leftTime;
+      })
       .slice(0, 4);
   }, [claims]);
 
@@ -156,6 +168,16 @@ export function DashboardPage() {
                 </Link>
               </div>
             </div>
+            <div className="card">
+              <p>답변 발송 완료</p>
+              <div className="metric-value">{summary.reply_sent_claims}</div>
+              <p className="metric-caption">발송 처리와 로그 기록까지 끝난 건</p>
+              <div className="actions">
+                <Link href="/inbox?sort=priority&reply_sent=true" className="button ghost">
+                  발송 완료 보기
+                </Link>
+              </div>
+            </div>
             {summary.cafe24 ? (
               <div className="card">
                 <p>Cafe24 Health</p>
@@ -215,7 +237,7 @@ export function DashboardPage() {
             <div className="card stack">
               <div>
                 <h3>자동화 큐</h3>
-                <p>자동 triage와 답변 초안 생성이 끝나서 바로 검토할 수 있는 건입니다.</p>
+                <p>자동 triage와 답변 초안은 준비됐지만 아직 발송 전인 건입니다.</p>
               </div>
               {automationQueue.length > 0 ? (
                 <div className="timeline">
@@ -240,7 +262,7 @@ export function DashboardPage() {
                   ))}
                 </div>
               ) : (
-                <div className="empty-state inline-state">아직 자동화 큐에 올라온 클레임이 없습니다.</div>
+                <div className="empty-state inline-state">현재 자동화 큐에 남아 있는 클레임이 없습니다.</div>
               )}
             </div>
           </section>
@@ -248,30 +270,33 @@ export function DashboardPage() {
           <section className="grid cols-2">
             <div className="card stack">
               <div>
-                <h3>카테고리 분포</h3>
-                <p>어떤 유형의 문의가 몰려 있는지 빠르게 확인할 수 있습니다.</p>
+                <h3>최근 답변 발송</h3>
+                <p>최근에 발송 처리까지 끝난 클레임을 빠르게 다시 확인할 수 있습니다.</p>
               </div>
-              <div className="category-summary">
-                {Object.entries(summary.by_category).map(([key, count]) => (
-                  <Badge key={key} tone="neutral">
-                    {categoryLabels[key as keyof typeof categoryLabels] ?? key} {count}
-                  </Badge>
-                ))}
-              </div>
-              <div className="summary-list">
-                <div className="summary-row">
-                  <span className="muted">승인</span>
-                  <strong>{summary.approved_claims}</strong>
+              {recentReplies.length > 0 ? (
+                <div className="timeline">
+                  {recentReplies.map((claim) => (
+                    <Link key={claim.id} href={`/claims/${claim.id}`} className="timeline-item">
+                      <div className="actions">
+                        <strong>
+                          {claim.order_no} / {claim.customer_name}
+                        </strong>
+                        <Badge tone="neutral">답변 발송</Badge>
+                      </div>
+                      <p>{claim.product_name}</p>
+                      <div className="actions">
+                        <Badge tone="teal">{statusLabels[claim.status]}</Badge>
+                        <span className="muted">
+                          {claim.automation.reply_sent_at ? formatDate(claim.automation.reply_sent_at) : "-"} /{" "}
+                          {claim.automation.reply_sent_by ?? "-"}
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
                 </div>
-                <div className="summary-row">
-                  <span className="muted">반려</span>
-                  <strong>{summary.rejected_claims}</strong>
-                </div>
-                <div className="summary-row">
-                  <span className="muted">완료</span>
-                  <strong>{summary.done_claims}</strong>
-                </div>
-              </div>
+              ) : (
+                <div className="empty-state inline-state">아직 발송 처리된 클레임이 없습니다.</div>
+              )}
             </div>
 
             <div className="card stack">
@@ -322,15 +347,15 @@ export function DashboardPage() {
               </Link>
               <Link href="/inbox?sort=priority&auto_triaged=true&reply_ready=true" className="resource-link">
                 <strong>자동화 큐 열기</strong>
-                <p>자동 분류와 답변 초안이 준비된 건만 모아서 검토합니다.</p>
+                <p>자동 분류와 답변 초안은 준비됐지만 아직 발송 전인 건만 모아서 봅니다.</p>
+              </Link>
+              <Link href="/inbox?sort=priority&reply_sent=true" className="resource-link">
+                <strong>발송 완료 인박스 열기</strong>
+                <p>답변 발송 로그까지 남은 클레임만 다시 확인합니다.</p>
               </Link>
               <Link href="/integrations/cafe24" className="resource-link">
                 <strong>Cafe24 콘솔 열기</strong>
                 <p>Mock Sync, OAuth placeholder, activity 상태를 점검합니다.</p>
-              </Link>
-              <Link href="/settings/policy" className="resource-link">
-                <strong>정책 수정</strong>
-                <p>교환/반품/환불 정책을 조정해서 답변 초안을 매장 정책에 맞춥니다.</p>
               </Link>
             </div>
           </section>

@@ -311,6 +311,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
               <div className="status-line">
                 <Badge tone="accent">자동 분류 완료</Badge>
                 {claim.automation.reply_ready ? <Badge tone="teal">답변 초안 준비</Badge> : null}
+                {claim.automation.reply_sent ? <Badge tone="neutral">답변 발송됨</Badge> : null}
                 {claim.automation.source_event ? <Badge tone="neutral">{claim.automation.source_event}</Badge> : null}
               </div>
               <div className="summary-list">
@@ -325,6 +326,14 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
                 <div className="summary-row">
                   <span className="muted">답변 신뢰도</span>
                   <strong>{formatPercent(claim.automation.draft_reply_confidence)}</strong>
+                </div>
+                <div className="summary-row">
+                  <span className="muted">발송 시각</span>
+                  <strong>{claim.automation.reply_sent_at ? formatDate(claim.automation.reply_sent_at) : "-"}</strong>
+                </div>
+                <div className="summary-row">
+                  <span className="muted">발송 담당자</span>
+                  <strong>{claim.automation.reply_sent_by ?? "-"}</strong>
                 </div>
               </div>
             </>
@@ -397,7 +406,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
           <p className="muted">{latestReply?.rationale ?? ""}</p>
           <div className="actions">
             <button className="button" onClick={handleSendReply} disabled={!replyDraft.trim() || !!workingAction}>
-              Send Reply + Done
+              {claim.automation.reply_sent ? "Resend Reply" : "Send Reply + Done"}
             </button>
             <button className="button ghost" onClick={handleCopyReply} disabled={!replyDraft.trim() || !!workingAction}>
               Copy Reply

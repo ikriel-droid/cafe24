@@ -88,6 +88,7 @@ def list_claims(
     search_text: str | None = None,
     auto_triaged: bool | None = None,
     reply_ready: bool | None = None,
+    reply_sent: bool | None = None,
 ) -> list[Claim]:
     merchant = get_default_merchant(session, merchant_id)
     query = (
@@ -117,15 +118,17 @@ def list_claims(
             )
     claims = list(session.scalars(query))
 
-    if auto_triaged is None and reply_ready is None:
+    if auto_triaged is None and reply_ready is None and reply_sent is None:
         return claims
 
     filtered_claims: list[Claim] = []
     for claim in claims:
         automation = build_claim_automation_summary(claim)
-        if auto_triaged is not None and automation["auto_triaged"] is not auto_triaged:
+        if auto_triaged is not None and automation["auto_triaged"] != auto_triaged:
             continue
-        if reply_ready is not None and automation["reply_ready"] is not reply_ready:
+        if reply_ready is not None and automation["reply_ready"] != reply_ready:
+            continue
+        if reply_sent is not None and automation["reply_sent"] != reply_sent:
             continue
         filtered_claims.append(claim)
     return filtered_claims
@@ -156,6 +159,7 @@ def build_claim_automation_summary(claim: Claim) -> dict[str, object]:
         (action for action in claim.suggested_actions if action.action_type == "draft_reply"),
         None,
     )
+    latest_reply_sent_log = next((log for log in claim.audit_logs if log.event_type == "reply_sent"), None)
     payload = auto_triage_log.payload_json if auto_triage_log else None
 
     classification_confidence = None
@@ -176,6 +180,9 @@ def build_claim_automation_summary(claim: Claim) -> dict[str, object]:
         "auto_triaged": auto_triage_log is not None,
         "auto_triaged_at": auto_triage_log.created_at if auto_triage_log else None,
         "reply_ready": latest_reply is not None and bool(latest_reply.draft_reply.strip()),
+        "reply_sent": latest_reply_sent_log is not None,
+        "reply_sent_at": latest_reply_sent_log.created_at if latest_reply_sent_log else None,
+        "reply_sent_by": latest_reply_sent_log.actor if latest_reply_sent_log else None,
         "classification_confidence": classification_confidence,
         "draft_reply_confidence": draft_reply_confidence,
         "source_event": source_event,
@@ -417,6 +424,7 @@ def get_dashboard_summary(
     search_text: str | None = None,
     auto_triaged: bool | None = None,
     reply_ready: bool | None = None,
+    reply_sent: bool | None = None,
 ) -> DashboardSummary:
     claims = list_claims(
         session,
@@ -426,6 +434,7 @@ def get_dashboard_summary(
         search_text=search_text,
         auto_triaged=auto_triaged,
         reply_ready=reply_ready,
+        reply_sent=reply_sent,
     )
     by_category_counter = Counter(claim.category.value for claim in claims)
     automation_summaries = [build_claim_automation_summary(claim) for claim in claims]
@@ -440,5 +449,6 @@ def get_dashboard_summary(
         high_urgency_claims=sum(claim.urgency.value == "high" for claim in claims),
         auto_triaged_claims=sum(summary["auto_triaged"] is True for summary in automation_summaries),
         reply_ready_claims=sum(summary["reply_ready"] is True for summary in automation_summaries),
+        reply_sent_claims=sum(summary["reply_sent"] is True for summary in automation_summaries),
         by_category=dict(sorted(by_category_counter.items())),
     )

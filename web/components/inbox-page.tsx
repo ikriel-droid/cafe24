@@ -146,6 +146,7 @@ export function InboxPage() {
   const [searchText, setSearchText] = useState("");
   const [autoTriagedOnly, setAutoTriagedOnly] = useState(false);
   const [replyReadyOnly, setReplyReadyOnly] = useState(false);
+  const [replySentOnly, setReplySentOnly] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -166,6 +167,7 @@ export function InboxPage() {
     setSearchText(params.get("q") ?? "");
     setAutoTriagedOnly(params.get("auto_triaged") === "true");
     setReplyReadyOnly(params.get("reply_ready") === "true");
+    setReplySentOnly(params.get("reply_sent") === "true");
     setIsInitialized(true);
   }, []);
 
@@ -187,6 +189,7 @@ export function InboxPage() {
       if (deferredSearchText.trim()) search.set("q", deferredSearchText.trim());
       if (autoTriagedOnly) search.set("auto_triaged", "true");
       if (replyReadyOnly) search.set("reply_ready", "true");
+      if (replySentOnly) search.set("reply_sent", "true");
 
       const queryString = search.toString();
       const claimsPath = queryString ? `/api/claims?${queryString}` : "/api/claims";
@@ -232,7 +235,7 @@ export function InboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [category, status, deferredSearchText, autoTriagedOnly, replyReadyOnly, isInitialized]);
+  }, [category, status, deferredSearchText, autoTriagedOnly, replyReadyOnly, replySentOnly, isInitialized]);
 
   useEffect(() => {
     if (!isInitialized) {
@@ -246,11 +249,12 @@ export function InboxPage() {
     if (searchText.trim()) params.set("q", searchText.trim());
     if (autoTriagedOnly) params.set("auto_triaged", "true");
     if (replyReadyOnly) params.set("reply_ready", "true");
+    if (replySentOnly) params.set("reply_sent", "true");
 
     const query = params.toString();
     const nextUrl = query ? `/inbox?${query}` : "/inbox";
     window.history.replaceState(null, "", nextUrl);
-  }, [category, status, sortBy, searchText, autoTriagedOnly, replyReadyOnly, isInitialized]);
+  }, [category, status, sortBy, searchText, autoTriagedOnly, replyReadyOnly, replySentOnly, isInitialized]);
 
   async function handleRunMockSync() {
     setSyncWorking(true);
@@ -398,6 +402,11 @@ export function InboxPage() {
             <div className="metric-value">{summary.reply_ready_claims}</div>
             <p className="metric-caption">바로 복사 가능한 답변 초안이 있는 건</p>
           </div>
+          <div className="card">
+            <p>답변 발송 완료</p>
+            <div className="metric-value">{summary.reply_sent_claims}</div>
+            <p className="metric-caption">발송 처리와 로그 기록까지 끝난 건</p>
+          </div>
           {summary.cafe24 ? (
             <div className="card">
               <p>Cafe24 Health</p>
@@ -482,6 +491,7 @@ export function InboxPage() {
               setSortBy("priority");
               setAutoTriagedOnly(false);
               setReplyReadyOnly(false);
+              setReplySentOnly(false);
             }}
           >
             필터 초기화
@@ -502,6 +512,13 @@ export function InboxPage() {
             onClick={() => setReplyReadyOnly((current) => !current)}
           >
             답변 초안 준비만 보기
+          </button>
+          <button
+            type="button"
+            className={`toggle-chip ${replySentOnly ? "active" : ""}`}
+            onClick={() => setReplySentOnly((current) => !current)}
+          >
+            답변 발송 완료만 보기
           </button>
         </div>
 
@@ -556,11 +573,17 @@ export function InboxPage() {
                         <div className="claim-automation-badges">
                           {claim.automation.auto_triaged ? <Badge tone="accent">자동 분류</Badge> : null}
                           {claim.automation.reply_ready ? <Badge tone="teal">답변 초안 준비</Badge> : null}
-                          {!claim.automation.auto_triaged && !claim.automation.reply_ready ? (
+                          {claim.automation.reply_sent ? <Badge tone="neutral">답변 발송</Badge> : null}
+                          {!claim.automation.auto_triaged && !claim.automation.reply_ready && !claim.automation.reply_sent ? (
                             <span className="muted">대기</span>
                           ) : null}
                         </div>
-                        {claim.automation.auto_triaged ? (
+                        {claim.automation.reply_sent ? (
+                          <span className="claim-automation-meta">
+                            발송 {claim.automation.reply_sent_at ? formatDate(claim.automation.reply_sent_at) : "-"} /{" "}
+                            {claim.automation.reply_sent_by ?? "-"}
+                          </span>
+                        ) : claim.automation.auto_triaged ? (
                           <span className="claim-automation-meta">
                             분류 {formatPercent(claim.automation.classification_confidence)} / 답변{" "}
                             {formatPercent(claim.automation.draft_reply_confidence)}

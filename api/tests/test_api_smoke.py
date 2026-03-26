@@ -8,6 +8,46 @@ from app.db.session import reset_engine
 from app.integrations.cafe24.sync_service import Cafe24SyncService
 
 
+def test_reply_sent_filter_and_summary(monkeypatch) -> None:
+    temp_root = Path(".tmp") / "tests" / "reply-sent-filter"
+    if temp_root.exists():
+        shutil.rmtree(temp_root)
+    temp_root.mkdir(parents=True, exist_ok=True)
+
+    database_url = f"sqlite:///{temp_root.joinpath('claimmate-test.db').resolve().as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("SEED_DEMO_DATA", "true")
+    get_settings.cache_clear()
+    reset_engine()
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        client.post("/api/claims/1/draft-reply")
+        response = client.post(
+            "/api/claims/1/send-reply",
+            json={"reply_body": "manual reply body", "actor": "qa_operator", "mark_done": True},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["automation"]["reply_sent"] is True
+        assert payload["automation"]["reply_sent_at"] is not None
+        assert payload["automation"]["reply_sent_by"] == "qa_operator"
+
+        filtered_claims = client.get("/api/claims?reply_sent=true")
+        assert filtered_claims.status_code == 200
+        filtered_payload = filtered_claims.json()
+        assert len(filtered_payload) == 1
+        assert filtered_payload[0]["order_no"] == "CM-240301-001"
+        assert filtered_payload[0]["automation"]["reply_sent"] is True
+
+        filtered_summary = client.get("/api/dashboard/summary?reply_sent=true")
+        assert filtered_summary.status_code == 200
+        summary_payload = filtered_summary.json()
+        assert summary_payload["total_claims"] == 1
+        assert summary_payload["reply_sent_claims"] == 1
+
+
 def test_claim_reply_send_records_message_and_completes_claim(monkeypatch) -> None:
     temp_root = Path(".tmp") / "tests" / "send-reply"
     if temp_root.exists():
