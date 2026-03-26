@@ -1,0 +1,85 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: claimmate-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-claimmate}
+      POSTGRES_USER: ${POSTGRES_USER:-claimmate}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-claimmate}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-claimmate} -d ${POSTGRES_DB:-claimmate}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: claimmate-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./api
+    container_name: claimmate-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      APP_ENV: docker
+      API_PREFIX: /api
+      DATABASE_URL: postgresql+psycopg://claimmate:claimmate@postgres:5432/claimmate
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: http://127.0.0.1:${WEB_PORT:-3000},http://localhost:${WEB_PORT:-3000}
+      DEFAULT_MERCHANT_ID: 1
+      OPENAI_API_KEY: ""
+      OPENAI_MODEL: gpt-4o-mini
+      SEED_DEMO_DATA: "true"
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./api:/app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  web:
+    build:
+      context: ./web
+    container_name: claimmate-web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:${API_PORT:-8000}
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    volumes:
+      - ./web:/app
+      - web-node-modules:/app/node_modules
+      - web-next-cache:/app/.next
+    command: ["npm", "run", "dev", "--", "--hostname", "0.0.0.0", "--port", "3000"]
+
+volumes:
+  postgres-data:
+  redis-data:
+  web-node-modules:
+  web-next-cache:

@@ -1,0 +1,6 @@
+node_modules
+.next
+coverage
+.codex-frontend.log
+.codex-frontend.err.log
+

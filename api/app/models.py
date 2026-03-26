@@ -1,0 +1,159 @@
+from __future__ import annotations
+
+from datetime import datetime
+from enum import Enum
+from typing import Any
+
+from sqlalchemy import JSON, DateTime, Enum as SqlEnum, ForeignKey, Integer, String, Text, func
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class ClaimCategory(str, Enum):
+    DELIVERY = "delivery"
+    CANCELLATION = "cancellation"
+    EXCHANGE = "exchange"
+    RETURN = "return"
+    REFUND = "refund"
+    DEFECT = "defect"
+    MISDELIVERY = "misdelivery"
+    OTHER = "other"
+
+
+class ClaimStatus(str, Enum):
+    OPEN = "open"
+    IN_REVIEW = "in_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    DONE = "done"
+
+
+class ClaimUrgency(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class Merchant(Base):
+    __tablename__ = "merchants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    mall_name: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    policy: Mapped["Policy | None"] = relationship(back_populates="merchant", uselist=False)
+    claims: Mapped[list["Claim"]] = relationship(back_populates="merchant")
+
+
+class Policy(Base):
+    __tablename__ = "policies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    merchant_id: Mapped[int] = mapped_column(ForeignKey("merchants.id"), nullable=False, unique=True)
+    exchange_window_days: Mapped[int] = mapped_column(Integer, default=7)
+    return_window_days: Mapped[int] = mapped_column(Integer, default=7)
+    return_shipping_fee: Mapped[int] = mapped_column(Integer, default=3000)
+    exchange_shipping_fee: Mapped[int] = mapped_column(Integer, default=6000)
+    refund_rule_text: Mapped[str] = mapped_column(Text, default="")
+    exception_rule_text: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    merchant: Mapped["Merchant"] = relationship(back_populates="policy")
+
+
+class Claim(Base):
+    __tablename__ = "claims"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    merchant_id: Mapped[int] = mapped_column(ForeignKey("merchants.id"), nullable=False, index=True)
+    order_no: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    customer_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    product_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    category: Mapped[ClaimCategory] = mapped_column(
+        SqlEnum(ClaimCategory, native_enum=False),
+        nullable=False,
+        default=ClaimCategory.OTHER,
+    )
+    status: Mapped[ClaimStatus] = mapped_column(
+        SqlEnum(ClaimStatus, native_enum=False),
+        nullable=False,
+        default=ClaimStatus.OPEN,
+    )
+    reason_text: Mapped[str] = mapped_column(Text, nullable=False)
+    ai_label: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    urgency: Mapped[ClaimUrgency] = mapped_column(
+        SqlEnum(ClaimUrgency, native_enum=False),
+        nullable=False,
+        default=ClaimUrgency.MEDIUM,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    merchant: Mapped["Merchant"] = relationship(back_populates="claims")
+    messages: Mapped[list["ClaimMessage"]] = relationship(
+        back_populates="claim",
+        cascade="all, delete-orphan",
+        order_by=lambda: (ClaimMessage.created_at, ClaimMessage.id),
+    )
+    suggested_actions: Mapped[list["SuggestedAction"]] = relationship(
+        back_populates="claim",
+        cascade="all, delete-orphan",
+        order_by=lambda: (SuggestedAction.created_at.desc(), SuggestedAction.id.desc()),
+    )
+    audit_logs: Mapped[list["AuditLog"]] = relationship(
+        back_populates="claim",
+        cascade="all, delete-orphan",
+        order_by=lambda: (AuditLog.created_at.desc(), AuditLog.id.desc()),
+    )
+
+
+class ClaimMessage(Base):
+    __tablename__ = "claim_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    claim_id: Mapped[int] = mapped_column(ForeignKey("claims.id"), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    claim: Mapped["Claim"] = relationship(back_populates="messages")
+
+
+class SuggestedAction(Base):
+    __tablename__ = "suggested_actions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    claim_id: Mapped[int] = mapped_column(ForeignKey("claims.id"), nullable=False, index=True)
+    action_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    draft_reply: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[float] = mapped_column(nullable=False, default=0.0)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    claim: Mapped["Claim"] = relationship(back_populates="suggested_actions")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    claim_id: Mapped[int] = mapped_column(ForeignKey("claims.id"), nullable=False, index=True)
+    actor: Mapped[str] = mapped_column(String(64), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    claim: Mapped["Claim"] = relationship(back_populates="audit_logs")
