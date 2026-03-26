@@ -9,6 +9,13 @@ from app.models import Claim, ClaimStatus, Merchant
 
 from .oauth_client import Cafe24OAuthClient
 
+MOCK_WEBHOOK_LABELS: dict[str, tuple[str, str]] = {
+    "order.cancel.requested": ("주문 취소 요청", "고객이 주문 취소를 요청한 이벤트를 시뮬레이션합니다."),
+    "claim.exchange.requested": ("교환 요청", "고객이 교환 접수를 남긴 이벤트를 시뮬레이션합니다."),
+    "claim.return.requested": ("반품 요청", "고객이 반품 접수를 남긴 이벤트를 시뮬레이션합니다."),
+    "delivery.delay.reported": ("배송 지연 알림", "배송 지연 이슈가 webhook으로 유입된 상황을 시뮬레이션합니다."),
+}
+
 
 @dataclass(slots=True)
 class Cafe24ActivityEvent:
@@ -69,7 +76,7 @@ class Cafe24SyncService:
             return (
                 "attention",
                 "Mock Sync 대기",
-                "아직 Cafe24 Mock Sync를 실행하지 않았습니다. 먼저 한 번 실행해 로컬 연동 흐름을 확인하세요.",
+                "아직 Cafe24 Mock Sync를 실행하지 않았습니다. 먼저 한 번 실행해 로컬 연동 흐름을 확인해 주세요.",
             )
 
         if not oauth_configured:
@@ -83,20 +90,20 @@ class Cafe24SyncService:
             return (
                 "attention",
                 "Webhook 확인 필요",
-                f"대기 중인 webhook이 {snapshot.pending_webhooks}건입니다. mock sync 뒤 이벤트 흐름을 확인하세요.",
+                f"대기 중인 webhook이 {snapshot.pending_webhooks}건입니다. mock sync 또는 activity 흐름을 다시 확인해 주세요.",
             )
 
         if pending_claims >= 8:
             return (
                 "attention",
                 "처리 대기 문의 많음",
-                f"현재 처리 대기 클레임이 {pending_claims}건입니다. 인박스 우선순위를 먼저 확인하세요.",
+                f"현재 처리 대기 클레임이 {pending_claims}건입니다. 인박스에서 우선순위를 먼저 확인해 주세요.",
             )
 
         return (
             "healthy",
             "Mock 상태 양호",
-            "최근 Mock Sync가 완료됐고 현재 대기 항목도 안정적입니다.",
+            "최근 Mock Sync가 완료되었고 현재 대기 상태도 안정적입니다.",
         )
 
     def _build_next_action(
@@ -153,7 +160,7 @@ class Cafe24SyncService:
             "next_action_href": next_action_href,
             "connected": False,
             "oauth_configured": oauth_configured,
-            "webhook_endpoint_ready": False,
+            "webhook_endpoint_ready": True,
             "authorize_url": authorize_url,
             "last_sync_result": snapshot.last_sync_result,
             "last_synced_at": snapshot.last_synced_at,
@@ -175,8 +182,9 @@ class Cafe24SyncService:
             ],
             "notes": [
                 "Mock Sync uses seeded local claims and does not call Cafe24.",
+                "Mock webhook simulation lets you test pending webhook backlog without network access.",
                 "OAuth and webhook wiring stay as placeholders until live API work starts.",
-                "Use this screen to validate the future Cafe24 integration flow without network access.",
+                "Use this screen to validate the future Cafe24 integration flow before real credentials arrive.",
             ],
         }
 
@@ -199,6 +207,32 @@ class Cafe24SyncService:
                 title="Cafe24 Mock Sync completed",
                 detail=f"{snapshot.synced_orders} orders and {snapshot.synced_claims} claims were refreshed locally.",
                 batch_id=snapshot.last_sync_batch_id,
+            ),
+        )
+        return self.get_status(merchant, claims, settings)
+
+    def simulate_webhook(
+        self,
+        merchant: Merchant,
+        claims: Sequence[Claim],
+        settings: Settings,
+        event_type: str,
+        order_no: str | None = None,
+    ) -> dict[str, object]:
+        snapshot = self._get_snapshot(merchant.id)
+        title, description = MOCK_WEBHOOK_LABELS.get(
+            event_type,
+            ("기타 Cafe24 webhook", "정의되지 않은 webhook 이벤트를 로컬 placeholder로 기록합니다."),
+        )
+        snapshot.pending_webhooks += 1
+        self._append_event(
+            merchant.id,
+            Cafe24ActivityEvent(
+                occurred_at=datetime.now(timezone.utc),
+                event_type="mock_webhook",
+                status="received",
+                title=f"{title} webhook received",
+                detail=f"{description}{f' 주문번호: {order_no}.' if order_no else ''}",
             ),
         )
         return self.get_status(merchant, claims, settings)

@@ -105,6 +105,11 @@ class DraftReplyResponse(BaseModel):
     rationale: str
 
 
+class Cafe24MockWebhookRequest(BaseModel):
+    event_type: str = Field(min_length=1, max_length=100)
+    order_no: str | None = Field(default=None, max_length=100)
+
+
 class Cafe24ActivityEvent(BaseModel):
     occurred_at: datetime
     event_type: str

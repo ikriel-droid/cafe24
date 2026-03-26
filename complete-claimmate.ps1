@@ -266,6 +266,7 @@ function Invoke-SmokeStage {
   $summary = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/dashboard/summary"
   $policy = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/policy"
   $sync = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/integrations/cafe24/mock-sync" -Method Post
+  $webhook = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/integrations/cafe24/mock-webhook" -Method Post -Body '{"event_type":"delivery.delay.reported"}' -ContentType "application/json"
   $classification = Invoke-RestMethod -Uri ("http://127.0.0.1:8000/api/claims/{0}/classify" -f $SmokeClaimId) -Method Post
   $draft = Invoke-RestMethod -Uri ("http://127.0.0.1:8000/api/claims/{0}/draft-reply" -f $SmokeClaimId) -Method Post
 
@@ -278,6 +279,7 @@ function Invoke-SmokeStage {
   Write-Host ("summary total/open: {0}/{1}" -f $summary.total_claims, ($summary.open_claims + $summary.in_review_claims))
   Write-Host ("policy exchange/return window: {0}/{1}" -f $policy.exchange_window_days, $policy.return_window_days)
   Write-Host ("mock sync result: {0}" -f $sync.last_sync_result)
+  Write-Host ("mock webhook pending count: {0}" -f $webhook.pending_webhooks)
   Write-Host ("classify: claim {0} -> {1}/{2}" -f $classification.claim_id, $classification.category, $classification.urgency)
   Write-Host ("draft reply confidence: {0}" -f $draft.confidence)
   Write-Host "web: http://127.0.0.1:8000/dashboard/"
@@ -292,6 +294,7 @@ function Invoke-SmokeStage {
     exchangeWindowDays      = $policy.exchange_window_days
     returnWindowDays        = $policy.return_window_days
     mockSyncResult          = $sync.last_sync_result
+    mockWebhookPendingCount = $webhook.pending_webhooks
     classificationCategory  = $classification.category
     classificationUrgency   = $classification.urgency
     draftReplyConfidence    = $draft.confidence
@@ -323,6 +326,7 @@ function Invoke-ReportStage {
       "- open + in_review: $($script:SmokeSummary.openAndInReviewClaims)"
       "- policy windows: exchange $($script:SmokeSummary.exchangeWindowDays) / return $($script:SmokeSummary.returnWindowDays)"
       "- mock sync result: $($script:SmokeSummary.mockSyncResult)"
+      "- mock webhook pending count: $($script:SmokeSummary.mockWebhookPendingCount)"
       "- classify sample: $($script:SmokeSummary.classificationCategory) / $($script:SmokeSummary.classificationUrgency)"
       "- draft reply confidence: $($script:SmokeSummary.draftReplyConfidence)"
     )

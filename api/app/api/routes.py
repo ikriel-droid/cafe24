@@ -11,6 +11,7 @@ from app.integrations.cafe24.sync_service import Cafe24SyncService
 from app.models import ClaimCategory, ClaimStatus
 from app.schemas import (
     Cafe24IntegrationStatus,
+    Cafe24MockWebhookRequest,
     ClaimDetail,
     ClaimListItem,
     ClaimNoteCreate,
@@ -163,6 +164,27 @@ def cafe24_clear_activity(merchant_id: int | None = None, db: Session = Depends(
     service = build_cafe24_service(settings)
     service.clear_activity(merchant.id)
     return Cafe24IntegrationStatus.model_validate(service.get_status(merchant, claims, settings))
+
+
+@router.post("/integrations/cafe24/mock-webhook", response_model=Cafe24IntegrationStatus)
+def cafe24_mock_webhook(
+    payload: Cafe24MockWebhookRequest,
+    merchant_id: int | None = None,
+    db: Session = Depends(get_db),
+) -> Cafe24IntegrationStatus:
+    settings = get_settings()
+    merchant = get_default_merchant(db, merchant_id)
+    claims = list_claims(db, merchant_id=merchant.id)
+    service = build_cafe24_service(settings)
+    return Cafe24IntegrationStatus.model_validate(
+        service.simulate_webhook(
+            merchant,
+            claims,
+            settings,
+            event_type=payload.event_type,
+            order_no=payload.order_no,
+        )
+    )
 
 
 @router.get("/integrations/cafe24/callback")

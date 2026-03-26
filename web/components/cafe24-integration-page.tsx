@@ -46,6 +46,15 @@ export function Cafe24IntegrationPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [activityFilter, setActivityFilter] = useState<"all" | "mock_sync" | "oauth_callback">("all");
+  const [webhookType, setWebhookType] = useState("claim.return.requested");
+  const [webhookOrderNo, setWebhookOrderNo] = useState("");
+
+  const webhookOptions = [
+    { value: "claim.return.requested", label: "반품 요청" },
+    { value: "claim.exchange.requested", label: "교환 요청" },
+    { value: "order.cancel.requested", label: "주문 취소 요청" },
+    { value: "delivery.delay.reported", label: "배송 지연 알림" },
+  ];
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -130,6 +139,29 @@ export function Cafe24IntegrationPage() {
     } catch (clearError) {
       setNotice(null);
       setError(clearError instanceof Error ? clearError.message : "Cafe24 activity 초기화에 실패했습니다.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function handleMockWebhook() {
+    setWorking(true);
+    setError(null);
+
+    try {
+      const data = await apiFetch<Cafe24IntegrationStatus>("/api/integrations/cafe24/mock-webhook", {
+        method: "POST",
+        body: JSON.stringify({
+          event_type: webhookType,
+          order_no: webhookOrderNo.trim() || null,
+        }),
+      });
+      setStatus(data);
+      setNotice("Cafe24 mock webhook을 기록했습니다.");
+      setWebhookOrderNo("");
+    } catch (webhookError) {
+      setNotice(null);
+      setError(webhookError instanceof Error ? webhookError.message : "Cafe24 mock webhook 기록에 실패했습니다.");
     } finally {
       setWorking(false);
     }
@@ -300,6 +332,37 @@ export function Cafe24IntegrationPage() {
               </a>
             </div>
             <p className="muted">결과는 상단 notice와 최근 activity에 바로 반영됩니다.</p>
+          </section>
+
+          <section className="card stack">
+            <div>
+              <h3>Mock Webhook Test</h3>
+              <p>실제 Cafe24 webhook 대신 이벤트를 수동으로 넣어 pending webhook과 activity 흐름을 확인합니다.</p>
+            </div>
+            <div className="toolbar">
+              <div className="field">
+                <select value={webhookType} onChange={(event) => setWebhookType(event.target.value)}>
+                  {webhookOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <input
+                  value={webhookOrderNo}
+                  onChange={(event) => setWebhookOrderNo(event.target.value)}
+                  placeholder="선택 입력: 주문번호"
+                />
+              </div>
+              <button className="button" type="button" onClick={handleMockWebhook} disabled={working}>
+                Send Mock Webhook
+              </button>
+            </div>
+            <p className="muted">
+              webhook을 넣으면 pending webhook 수치가 증가하고 최근 activity에 `received` 이벤트가 추가됩니다.
+            </p>
           </section>
 
           <section className="card stack">
