@@ -144,6 +144,8 @@ export function InboxPage() {
   const [status, setStatus] = useState<"" | ClaimStatus>("");
   const [sortBy, setSortBy] = useState<SortOption>("priority");
   const [searchText, setSearchText] = useState("");
+  const [autoTriagedOnly, setAutoTriagedOnly] = useState(false);
+  const [replyReadyOnly, setReplyReadyOnly] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -162,6 +164,8 @@ export function InboxPage() {
     setStatus(statusOptions.some((option) => option.value === nextStatus) ? (nextStatus as "" | ClaimStatus) : "");
     setSortBy(sortOptions.some((option) => option.value === nextSort) ? (nextSort as SortOption) : "priority");
     setSearchText(params.get("q") ?? "");
+    setAutoTriagedOnly(params.get("auto_triaged") === "true");
+    setReplyReadyOnly(params.get("reply_ready") === "true");
     setIsInitialized(true);
   }, []);
 
@@ -181,6 +185,8 @@ export function InboxPage() {
       if (category) search.set("category", category);
       if (status) search.set("status", status);
       if (deferredSearchText.trim()) search.set("q", deferredSearchText.trim());
+      if (autoTriagedOnly) search.set("auto_triaged", "true");
+      if (replyReadyOnly) search.set("reply_ready", "true");
 
       const queryString = search.toString();
       const claimsPath = queryString ? `/api/claims?${queryString}` : "/api/claims";
@@ -226,7 +232,7 @@ export function InboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [category, status, deferredSearchText, isInitialized]);
+  }, [category, status, deferredSearchText, autoTriagedOnly, replyReadyOnly, isInitialized]);
 
   useEffect(() => {
     if (!isInitialized) {
@@ -238,11 +244,13 @@ export function InboxPage() {
     if (status) params.set("status", status);
     if (sortBy !== "priority") params.set("sort", sortBy);
     if (searchText.trim()) params.set("q", searchText.trim());
+    if (autoTriagedOnly) params.set("auto_triaged", "true");
+    if (replyReadyOnly) params.set("reply_ready", "true");
 
     const query = params.toString();
     const nextUrl = query ? `/inbox?${query}` : "/inbox";
     window.history.replaceState(null, "", nextUrl);
-  }, [category, status, sortBy, searchText, isInitialized]);
+  }, [category, status, sortBy, searchText, autoTriagedOnly, replyReadyOnly, isInitialized]);
 
   async function handleRunMockSync() {
     setSyncWorking(true);
@@ -266,7 +274,7 @@ export function InboxPage() {
       <header className="page-header">
         <div>
           <h2>Claim Inbox</h2>
-          <p>카테고리, 상태, 긴급도 기준으로 문의를 빠르게 정리하고 상세 화면으로 이동합니다.</p>
+          <p>카테고리, 상태, 자동화 기준으로 문의를 빠르게 정리하고 상세 화면으로 이동합니다.</p>
         </div>
         <div className="actions">
           <Link href="/dashboard" className="button secondary">
@@ -366,16 +374,29 @@ export function InboxPage() {
       {summary ? (
         <section className="grid cols-3">
           <div className="card">
-            <p>전체 클레임</p>
+            <p>현재 결과</p>
             <div className="metric-value">{summary.total_claims}</div>
+            <p className="metric-caption">지금 필터 기준으로 보이는 클레임 수</p>
           </div>
           <div className="card">
             <p>접수 + 검토 중</p>
             <div className="metric-value">{summary.open_claims + summary.in_review_claims}</div>
+            <p className="metric-caption">바로 대응이 필요한 진행 중 클레임</p>
           </div>
           <div className="card">
             <p>높은 긴급도</p>
             <div className="metric-value">{summary.high_urgency_claims}</div>
+            <p className="metric-caption">우선 확인이 필요한 문의</p>
+          </div>
+          <div className="card">
+            <p>자동 triage 완료</p>
+            <div className="metric-value">{summary.auto_triaged_claims}</div>
+            <p className="metric-caption">webhook 기준 자동 분류된 건</p>
+          </div>
+          <div className="card">
+            <p>답변 초안 준비</p>
+            <div className="metric-value">{summary.reply_ready_claims}</div>
+            <p className="metric-caption">바로 복사 가능한 답변 초안이 있는 건</p>
           </div>
           {summary.cafe24 ? (
             <div className="card">
@@ -459,9 +480,28 @@ export function InboxPage() {
               setCategory("");
               setStatus("");
               setSortBy("priority");
+              setAutoTriagedOnly(false);
+              setReplyReadyOnly(false);
             }}
           >
             필터 초기화
+          </button>
+        </div>
+
+        <div className="toggle-strip">
+          <button
+            type="button"
+            className={`toggle-chip ${autoTriagedOnly ? "active" : ""}`}
+            onClick={() => setAutoTriagedOnly((current) => !current)}
+          >
+            자동 triage 완료만 보기
+          </button>
+          <button
+            type="button"
+            className={`toggle-chip ${replyReadyOnly ? "active" : ""}`}
+            onClick={() => setReplyReadyOnly((current) => !current)}
+          >
+            답변 초안 준비만 보기
           </button>
         </div>
 

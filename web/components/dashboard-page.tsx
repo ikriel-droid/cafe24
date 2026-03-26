@@ -72,6 +72,18 @@ export function DashboardPage() {
       .slice(0, 5);
   }, [claims]);
 
+  const automationQueue = useMemo(() => {
+    return claims
+      .filter(
+        (claim) =>
+          (claim.status === "open" || claim.status === "in_review") &&
+          claim.automation.auto_triaged &&
+          claim.automation.reply_ready,
+      )
+      .sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime())
+      .slice(0, 4);
+  }, [claims]);
+
   async function handleRunMockSync() {
     setWorking(true);
     setError(null);
@@ -91,7 +103,7 @@ export function DashboardPage() {
       <header className="page-header">
         <div>
           <h2>운영 대시보드</h2>
-          <p>오늘 처리할 클레임, 정책 요약, Cafe24 상태를 한 번에 보는 시작 화면입니다.</p>
+          <p>오늘 처리할 클레임과 정책 요약, Cafe24 상태를 한 번에 보는 시작 화면입니다.</p>
         </div>
         <div className="actions">
           <Link href="/inbox?sort=priority" className="button">
@@ -112,7 +124,7 @@ export function DashboardPage() {
             <div className="card">
               <p>전체 클레임</p>
               <div className="metric-value">{summary.total_claims}</div>
-              <p className="metric-caption">데모 데이터 기준 현재 누적 건수</p>
+              <p className="metric-caption">데모 데이터 기준 현재 추적 건수</p>
             </div>
             <div className="card">
               <p>바로 처리할 건</p>
@@ -123,6 +135,26 @@ export function DashboardPage() {
               <p>높은 긴급도</p>
               <div className="metric-value">{summary.high_urgency_claims}</div>
               <p className="metric-caption">즉시 확인이 필요한 문의</p>
+            </div>
+            <div className="card">
+              <p>자동 triage 완료</p>
+              <div className="metric-value">{summary.auto_triaged_claims}</div>
+              <p className="metric-caption">Cafe24 webhook 기준 자동 분류된 건</p>
+              <div className="actions">
+                <Link href="/inbox?sort=priority&auto_triaged=true" className="button ghost">
+                  자동 분류 보기
+                </Link>
+              </div>
+            </div>
+            <div className="card">
+              <p>답변 초안 준비</p>
+              <div className="metric-value">{summary.reply_ready_claims}</div>
+              <p className="metric-caption">바로 복사 가능한 초안이 있는 건</p>
+              <div className="actions">
+                <Link href="/inbox?sort=priority&reply_ready=true" className="button ghost">
+                  초안 준비 보기
+                </Link>
+              </div>
             </div>
             {summary.cafe24 ? (
               <div className="card">
@@ -182,6 +214,40 @@ export function DashboardPage() {
 
             <div className="card stack">
               <div>
+                <h3>자동화 큐</h3>
+                <p>자동 triage와 답변 초안 생성이 끝나서 바로 검토할 수 있는 건입니다.</p>
+              </div>
+              {automationQueue.length > 0 ? (
+                <div className="timeline">
+                  {automationQueue.map((claim) => (
+                    <Link key={claim.id} href={`/claims/${claim.id}`} className="timeline-item">
+                      <div className="actions">
+                        <strong>
+                          {claim.order_no} / {claim.customer_name}
+                        </strong>
+                        <Badge tone="accent">자동 분류</Badge>
+                      </div>
+                      <p>{claim.product_name}</p>
+                      <div className="actions">
+                        <Badge tone="teal">답변 초안 준비</Badge>
+                        <Badge tone="neutral">{categoryLabels[claim.category]}</Badge>
+                      </div>
+                      <p className="muted">
+                        분류 {Math.round((claim.automation.classification_confidence ?? 0) * 100)}% / 답변{" "}
+                        {Math.round((claim.automation.draft_reply_confidence ?? 0) * 100)}%
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state inline-state">아직 자동화 큐에 올라온 클레임이 없습니다.</div>
+              )}
+            </div>
+          </section>
+
+          <section className="grid cols-2">
+            <div className="card stack">
+              <div>
                 <h3>카테고리 분포</h3>
                 <p>어떤 유형의 문의가 몰려 있는지 빠르게 확인할 수 있습니다.</p>
               </div>
@@ -207,9 +273,7 @@ export function DashboardPage() {
                 </div>
               </div>
             </div>
-          </section>
 
-          <section className="grid cols-2">
             <div className="card stack">
               <div>
                 <h3>운영 정책 스냅샷</h3>
@@ -244,26 +308,30 @@ export function DashboardPage() {
                 <div className="empty-state inline-state">정책 정보를 아직 불러오지 못했습니다.</div>
               )}
             </div>
+          </section>
 
-            <div className="card stack">
-              <div>
-                <h3>바로 가기</h3>
-                <p>운영자가 자주 여는 작업으로 바로 이동합니다.</p>
-              </div>
-              <div className="resource-links">
-                <Link href="/inbox?sort=priority" className="resource-link">
-                  <strong>우선순위 인박스 열기</strong>
-                  <p>긴급도와 상태 기준으로 바로 처리할 문의를 확인합니다.</p>
-                </Link>
-                <Link href="/integrations/cafe24" className="resource-link">
-                  <strong>Cafe24 콘솔 열기</strong>
-                  <p>Mock Sync, OAuth placeholder, activity 상태를 점검합니다.</p>
-                </Link>
-                <Link href="/settings/policy" className="resource-link">
-                  <strong>정책 수정</strong>
-                  <p>교환/반품/환불 정책을 조정해 답변 초안을 매장 정책에 맞춥니다.</p>
-                </Link>
-              </div>
+          <section className="card stack">
+            <div>
+              <h3>바로 가기</h3>
+              <p>운영자가 자주 여는 작업으로 바로 이동합니다.</p>
+            </div>
+            <div className="resource-links">
+              <Link href="/inbox?sort=priority" className="resource-link">
+                <strong>우선순위 인박스 열기</strong>
+                <p>긴급도와 상태 기준으로 바로 처리할 문의를 확인합니다.</p>
+              </Link>
+              <Link href="/inbox?sort=priority&auto_triaged=true&reply_ready=true" className="resource-link">
+                <strong>자동화 큐 열기</strong>
+                <p>자동 분류와 답변 초안이 준비된 건만 모아서 검토합니다.</p>
+              </Link>
+              <Link href="/integrations/cafe24" className="resource-link">
+                <strong>Cafe24 콘솔 열기</strong>
+                <p>Mock Sync, OAuth placeholder, activity 상태를 점검합니다.</p>
+              </Link>
+              <Link href="/settings/policy" className="resource-link">
+                <strong>정책 수정</strong>
+                <p>교환/반품/환불 정책을 조정해서 답변 초안을 매장 정책에 맞춥니다.</p>
+              </Link>
             </div>
           </section>
         </>

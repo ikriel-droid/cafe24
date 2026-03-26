@@ -86,6 +86,8 @@ def list_claims(
     category: ClaimCategory | None = None,
     status_value: ClaimStatus | None = None,
     search_text: str | None = None,
+    auto_triaged: bool | None = None,
+    reply_ready: bool | None = None,
 ) -> list[Claim]:
     merchant = get_default_merchant(session, merchant_id)
     query = (
@@ -113,7 +115,20 @@ def list_claims(
                     Claim.reason_text.ilike(pattern),
                 )
             )
-    return list(session.scalars(query))
+    claims = list(session.scalars(query))
+
+    if auto_triaged is None and reply_ready is None:
+        return claims
+
+    filtered_claims: list[Claim] = []
+    for claim in claims:
+        automation = build_claim_automation_summary(claim)
+        if auto_triaged is not None and automation["auto_triaged"] is not auto_triaged:
+            continue
+        if reply_ready is not None and automation["reply_ready"] is not reply_ready:
+            continue
+        filtered_claims.append(claim)
+    return filtered_claims
 
 
 def get_claim(session: Session, claim_id: int) -> Claim:
@@ -358,6 +373,8 @@ def get_dashboard_summary(
     category: ClaimCategory | None = None,
     status_value: ClaimStatus | None = None,
     search_text: str | None = None,
+    auto_triaged: bool | None = None,
+    reply_ready: bool | None = None,
 ) -> DashboardSummary:
     claims = list_claims(
         session,
@@ -365,8 +382,11 @@ def get_dashboard_summary(
         category=category,
         status_value=status_value,
         search_text=search_text,
+        auto_triaged=auto_triaged,
+        reply_ready=reply_ready,
     )
     by_category_counter = Counter(claim.category.value for claim in claims)
+    automation_summaries = [build_claim_automation_summary(claim) for claim in claims]
 
     return DashboardSummary(
         total_claims=len(claims),
@@ -376,5 +396,7 @@ def get_dashboard_summary(
         rejected_claims=sum(claim.status == ClaimStatus.REJECTED for claim in claims),
         done_claims=sum(claim.status == ClaimStatus.DONE for claim in claims),
         high_urgency_claims=sum(claim.urgency.value == "high" for claim in claims),
+        auto_triaged_claims=sum(summary["auto_triaged"] is True for summary in automation_summaries),
+        reply_ready_claims=sum(summary["reply_ready"] is True for summary in automation_summaries),
         by_category=dict(sorted(by_category_counter.items())),
     )

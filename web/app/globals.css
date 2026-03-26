@@ -184,6 +184,29 @@ textarea {
   margin-bottom: 18px;
 }
 
+.toggle-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.toggle-chip {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toggle-chip.active {
+  background: var(--accent-soft);
+  border-color: #e0b69e;
+  color: var(--accent);
+}
+
 .toolbar select,
 .toolbar input,
 .toolbar textarea {

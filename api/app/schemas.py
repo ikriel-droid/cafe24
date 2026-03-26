@@ -180,5 +180,7 @@ class DashboardSummary(BaseModel):
     rejected_claims: int
     done_claims: int
     high_urgency_claims: int
+    auto_triaged_claims: int
+    reply_ready_claims: int
     by_category: dict[str, int]
     cafe24: DashboardCafe24Overview | None = None

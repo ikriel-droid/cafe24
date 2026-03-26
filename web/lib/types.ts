@@ -84,6 +84,8 @@ export interface DashboardSummary {
   rejected_claims: number;
   done_claims: number;
   high_urgency_claims: number;
+  auto_triaged_claims: number;
+  reply_ready_claims: number;
   by_category: Record<string, number>;
   cafe24: DashboardCafe24Overview | null;
 }
