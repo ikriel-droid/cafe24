@@ -36,6 +36,15 @@ class AuditLogRead(ORMModel):
     created_at: datetime
 
 
+class ClaimAutomationRead(BaseModel):
+    auto_triaged: bool
+    auto_triaged_at: datetime | None
+    reply_ready: bool
+    classification_confidence: float | None
+    draft_reply_confidence: float | None
+    source_event: str | None
+
+
 class ClaimListItem(ORMModel):
     id: int
     order_no: str
@@ -47,6 +56,7 @@ class ClaimListItem(ORMModel):
     ai_label: str | None
     created_at: datetime
     updated_at: datetime
+    automation: ClaimAutomationRead
 
 
 class ClaimDetail(ClaimListItem):

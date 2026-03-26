@@ -344,6 +344,22 @@ tbody tr:hover {
   line-height: 1.5;
 }
 
+.claim-automation-cell {
+  display: grid;
+  gap: 6px;
+}
+
+.claim-automation-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.claim-automation-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .muted {
   color: var(--muted);
 }

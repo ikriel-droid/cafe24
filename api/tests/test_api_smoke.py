@@ -158,12 +158,23 @@ def test_cafe24_mock_webhook_increases_pending_count(monkeypatch) -> None:
         assert claim_payload["status"] == "in_review"
         assert claim_payload["urgency"] == "medium"
         assert claim_payload["ai_label"] == "return_request"
+        assert claim_payload["automation"]["auto_triaged"] is True
+        assert claim_payload["automation"]["reply_ready"] is True
+        assert claim_payload["automation"]["source_event"] == "claim.return.requested"
+        assert claim_payload["automation"]["classification_confidence"] is not None
+        assert claim_payload["automation"]["draft_reply_confidence"] is not None
         assert claim_payload["audit_logs"][0]["event_type"] == "cafe24_mock_webhook_auto_triaged"
         assert claim_payload["audit_logs"][1]["event_type"] == "draft_reply_generated"
         assert claim_payload["audit_logs"][2]["event_type"] == "claim_classified"
         assert claim_payload["audit_logs"][3]["event_type"] == "cafe24_mock_webhook_received"
         assert claim_payload["messages"][-1]["role"] == "system"
         assert {action["action_type"] for action in claim_payload["suggested_actions"]} >= {"classification", "draft_reply"}
+
+        list_response = client.get("/api/claims")
+        assert list_response.status_code == 200
+        claim_list_item = next(item for item in list_response.json() if item["order_no"] == "CM-240301-011")
+        assert claim_list_item["automation"]["auto_triaged"] is True
+        assert claim_list_item["automation"]["reply_ready"] is True
 
 
 def test_cafe24_callback_redirects_to_console(monkeypatch) -> None:

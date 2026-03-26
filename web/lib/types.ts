@@ -35,6 +35,15 @@ export interface AuditLog {
   created_at: string;
 }
 
+export interface ClaimAutomation {
+  auto_triaged: boolean;
+  auto_triaged_at: string | null;
+  reply_ready: boolean;
+  classification_confidence: number | null;
+  draft_reply_confidence: number | null;
+  source_event: string | null;
+}
+
 export interface Claim {
   id: number;
   merchant_id?: number;
@@ -45,6 +54,7 @@ export interface Claim {
   status: ClaimStatus;
   urgency: ClaimUrgency;
   ai_label: string | null;
+  automation: ClaimAutomation;
   reason_text?: string;
   created_at: string;
   updated_at: string;

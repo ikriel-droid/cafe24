@@ -83,6 +83,13 @@ function toneForActivityStatus(status: string) {
   return "accent";
 }
 
+function formatPercent(value: number | null) {
+  if (value === null) {
+    return "-";
+  }
+  return `${Math.round(value * 100)}%`;
+}
+
 function buildCafe24Overview(status: Cafe24IntegrationStatus): DashboardCafe24Overview {
   const latestEvent = status.recent_events[0];
   return {
@@ -151,8 +158,8 @@ export function InboxPage() {
     const nextStatus = params.get("status");
     const nextSort = params.get("sort");
 
-    setCategory(categoryOptions.some((option) => option.value === nextCategory) ? (nextCategory as ClaimCategory) : "");
-    setStatus(statusOptions.some((option) => option.value === nextStatus) ? (nextStatus as ClaimStatus) : "");
+    setCategory(categoryOptions.some((option) => option.value === nextCategory) ? (nextCategory as "" | ClaimCategory) : "");
+    setStatus(statusOptions.some((option) => option.value === nextStatus) ? (nextStatus as "" | ClaimStatus) : "");
     setSortBy(sortOptions.some((option) => option.value === nextSort) ? (nextSort as SortOption) : "priority");
     setSearchText(params.get("q") ?? "");
     setIsInitialized(true);
@@ -201,7 +208,7 @@ export function InboxPage() {
           } else {
             setSummary(summaryResult.value);
             setSyncStatus(null);
-            setSyncError("Cafe24 상태를 일시적으로 불러오지 못했습니다. 잠시 뒤 다시 확인해 주세요.");
+            setSyncError("Cafe24 상태를 일시적으로 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.");
           }
         }
       } catch (loadError) {
@@ -259,7 +266,7 @@ export function InboxPage() {
       <header className="page-header">
         <div>
           <h2>Claim Inbox</h2>
-          <p>카테고리, 상태, 긴급도를 기준으로 클레임을 빠르게 정리하고 상세 화면으로 이동합니다.</p>
+          <p>카테고리, 상태, 긴급도 기준으로 문의를 빠르게 정리하고 상세 화면으로 이동합니다.</p>
         </div>
         <div className="actions">
           <Link href="/dashboard" className="button secondary">
@@ -414,7 +421,7 @@ export function InboxPage() {
             <input
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
-              placeholder="주문번호, 고객명, 상품명, 문의 내용으로 검색해 보세요."
+              placeholder="주문번호, 고객명, 상품명, 문의 내용으로 검색해 보세요"
             />
           </div>
           <div className="field">
@@ -485,6 +492,7 @@ export function InboxPage() {
                   <th>카테고리</th>
                   <th>상태</th>
                   <th>긴급도</th>
+                  <th>AI 처리</th>
                   <th>접수일</th>
                 </tr>
               </thead>
@@ -502,6 +510,23 @@ export function InboxPage() {
                     </td>
                     <td>
                       <Badge tone={toneForUrgency(claim.urgency)}>{urgencyLabels[claim.urgency]}</Badge>
+                    </td>
+                    <td>
+                      <div className="claim-automation-cell">
+                        <div className="claim-automation-badges">
+                          {claim.automation.auto_triaged ? <Badge tone="accent">자동 분류</Badge> : null}
+                          {claim.automation.reply_ready ? <Badge tone="teal">답변 초안 준비</Badge> : null}
+                          {!claim.automation.auto_triaged && !claim.automation.reply_ready ? (
+                            <span className="muted">대기</span>
+                          ) : null}
+                        </div>
+                        {claim.automation.auto_triaged ? (
+                          <span className="claim-automation-meta">
+                            분류 {formatPercent(claim.automation.classification_confidence)} / 답변{" "}
+                            {formatPercent(claim.automation.draft_reply_confidence)}
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td>{formatDate(claim.created_at)}</td>
                   </tr>

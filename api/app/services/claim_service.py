@@ -88,7 +88,15 @@ def list_claims(
     search_text: str | None = None,
 ) -> list[Claim]:
     merchant = get_default_merchant(session, merchant_id)
-    query = select(Claim).where(Claim.merchant_id == merchant.id).order_by(Claim.created_at.desc())
+    query = (
+        select(Claim)
+        .where(Claim.merchant_id == merchant.id)
+        .options(
+            selectinload(Claim.suggested_actions),
+            selectinload(Claim.audit_logs),
+        )
+        .order_by(Claim.created_at.desc())
+    )
     if category:
         query = query.where(Claim.category == category)
     if status_value:
@@ -122,6 +130,41 @@ def get_claim(session: Session, claim_id: int) -> Claim:
     if claim is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Claim not found.")
     return claim
+
+
+def build_claim_automation_summary(claim: Claim) -> dict[str, object]:
+    auto_triage_log = next(
+        (log for log in claim.audit_logs if log.event_type == "cafe24_mock_webhook_auto_triaged"),
+        None,
+    )
+    latest_reply = next(
+        (action for action in claim.suggested_actions if action.action_type == "draft_reply"),
+        None,
+    )
+    payload = auto_triage_log.payload_json if auto_triage_log else None
+
+    classification_confidence = None
+    draft_reply_confidence = None
+    source_event = None
+    if isinstance(payload, dict):
+        classification_value = payload.get("classification_confidence")
+        draft_value = payload.get("draft_confidence")
+        source_value = payload.get("source_event")
+        if isinstance(classification_value, (int, float)):
+            classification_confidence = float(classification_value)
+        if isinstance(draft_value, (int, float)):
+            draft_reply_confidence = float(draft_value)
+        if isinstance(source_value, str):
+            source_event = source_value
+
+    return {
+        "auto_triaged": auto_triage_log is not None,
+        "auto_triaged_at": auto_triage_log.created_at if auto_triage_log else None,
+        "reply_ready": latest_reply is not None and bool(latest_reply.draft_reply.strip()),
+        "classification_confidence": classification_confidence,
+        "draft_reply_confidence": draft_reply_confidence,
+        "source_event": source_event,
+    }
 
 
 def record_audit_log(
@@ -301,6 +344,7 @@ def apply_mock_webhook_to_claim(
             "urgency": classification.urgency.value,
             "classification_confidence": classification.confidence,
             "draft_confidence": draft_reply.confidence,
+            "source_event": event_type,
         },
     )
     session.commit()

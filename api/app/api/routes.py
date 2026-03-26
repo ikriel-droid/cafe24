@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 from app.db.session import get_db
 from app.integrations.cafe24.oauth_client import Cafe24OAuthClient
 from app.integrations.cafe24.sync_service import Cafe24SyncService
-from app.models import ClaimCategory, ClaimStatus
+from app.models import Claim, ClaimCategory, ClaimStatus
 from app.schemas import (
     Cafe24IntegrationStatus,
     Cafe24MockWebhookRequest,
@@ -26,6 +26,7 @@ from app.schemas import (
 from app.services.claim_service import (
     apply_mock_webhook_to_claim,
     add_claim_note,
+    build_claim_automation_summary,
     classify_claim,
     get_default_merchant,
     generate_draft_reply,
@@ -39,6 +40,33 @@ from app.services.claim_service import (
 from app.core.config import get_settings
 
 router = APIRouter()
+
+
+def build_claim_base_payload(claim: Claim) -> dict[str, object]:
+    return {
+        "id": claim.id,
+        "order_no": claim.order_no,
+        "customer_name": claim.customer_name,
+        "product_name": claim.product_name,
+        "category": claim.category,
+        "status": claim.status,
+        "urgency": claim.urgency,
+        "ai_label": claim.ai_label,
+        "created_at": claim.created_at,
+        "updated_at": claim.updated_at,
+        "automation": build_claim_automation_summary(claim),
+    }
+
+
+def build_claim_detail_payload(claim: Claim) -> dict[str, object]:
+    return {
+        **build_claim_base_payload(claim),
+        "merchant_id": claim.merchant_id,
+        "reason_text": claim.reason_text,
+        "messages": claim.messages,
+        "suggested_actions": claim.suggested_actions,
+        "audit_logs": claim.audit_logs,
+    }
 
 
 def build_cafe24_service(settings) -> Cafe24SyncService:
@@ -73,12 +101,12 @@ def claims_index(
         status_value=status_value,
         search_text=q,
     )
-    return [ClaimListItem.model_validate(claim) for claim in claims]
+    return [ClaimListItem.model_validate(build_claim_base_payload(claim)) for claim in claims]
 
 
 @router.get("/claims/{claim_id}", response_model=ClaimDetail)
 def claims_detail(claim_id: int, db: Session = Depends(get_db)) -> ClaimDetail:
-    return ClaimDetail.model_validate(get_claim(db, claim_id))
+    return ClaimDetail.model_validate(build_claim_detail_payload(get_claim(db, claim_id)))
 
 
 @router.patch("/claims/{claim_id}/status", response_model=ClaimDetail)
@@ -88,7 +116,7 @@ def claims_update_status(
     db: Session = Depends(get_db),
 ) -> ClaimDetail:
     claim = update_claim_status(db, claim_id, payload.status, payload.actor)
-    return ClaimDetail.model_validate(claim)
+    return ClaimDetail.model_validate(build_claim_detail_payload(claim))
 
 
 @router.post("/claims/{claim_id}/notes", response_model=ClaimDetail)
@@ -98,7 +126,7 @@ def claims_add_note(
     db: Session = Depends(get_db),
 ) -> ClaimDetail:
     claim = add_claim_note(db, claim_id, payload)
-    return ClaimDetail.model_validate(claim)
+    return ClaimDetail.model_validate(build_claim_detail_payload(claim))
 
 
 @router.get("/policy", response_model=PolicyRead)
