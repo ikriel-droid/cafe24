@@ -25,6 +25,23 @@ function toneForHealthStatus(status: string) {
   return "neutral";
 }
 
+async function copyText(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const helper = document.createElement("textarea");
+  helper.value = value;
+  helper.setAttribute("readonly", "true");
+  helper.style.position = "absolute";
+  helper.style.left = "-9999px";
+  document.body.appendChild(helper);
+  helper.select();
+  document.execCommand("copy");
+  document.body.removeChild(helper);
+}
+
 export function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [claims, setClaims] = useState<Claim[]>([]);
@@ -34,6 +51,7 @@ export function DashboardPage() {
   const [automationWorkingId, setAutomationWorkingId] = useState<number | null>(null);
   const [followUpWorkingId, setFollowUpWorkingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function loadDashboard() {
     setLoading(true);
@@ -59,6 +77,15 @@ export function DashboardPage() {
   useEffect(() => {
     void loadDashboard();
   }, []);
+
+  useEffect(() => {
+    if (!notice) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setNotice(null), 2400);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   const queueClaims = useMemo(() => {
     return [...claims]
@@ -101,10 +128,12 @@ export function DashboardPage() {
   async function handleRunMockSync() {
     setWorking(true);
     setError(null);
+    setNotice(null);
 
     try {
       await apiFetch<Cafe24IntegrationStatus>("/api/integrations/cafe24/mock-sync", { method: "POST" });
       await loadDashboard();
+      setNotice("Cafe24 Mock Sync를 다시 실행했습니다.");
     } catch (syncError) {
       setError(syncError instanceof Error ? syncError.message : "Cafe24 Mock Sync 실행에 실패했습니다.");
     } finally {
@@ -115,6 +144,7 @@ export function DashboardPage() {
   async function handleQuickSendDraft(claimId: number) {
     setAutomationWorkingId(claimId);
     setError(null);
+    setNotice(null);
 
     try {
       await apiFetch<Claim>(`/api/claims/${claimId}/send-reply`, {
@@ -122,6 +152,7 @@ export function DashboardPage() {
         body: JSON.stringify({ actor: "dashboard_operator", mark_done: true }),
       });
       await loadDashboard();
+      setNotice("자동화 큐에서 답변 발송과 완료 처리를 바로 반영했습니다.");
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "자동화 큐 발송 처리에 실패했습니다.");
     } finally {
@@ -132,6 +163,7 @@ export function DashboardPage() {
   async function handleQuickFollowUpDone(claimId: number) {
     setFollowUpWorkingId(claimId);
     setError(null);
+    setNotice(null);
 
     try {
       await apiFetch<Claim>(`/api/claims/${claimId}/status`, {
@@ -139,10 +171,29 @@ export function DashboardPage() {
         body: JSON.stringify({ status: "done", actor: "dashboard_operator" }),
       });
       await loadDashboard();
+      setNotice("후속 확인 건을 완료 처리했습니다.");
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "후속 확인 완료 처리에 실패했습니다.");
     } finally {
       setFollowUpWorkingId(null);
+    }
+  }
+
+  async function handleCopyDraftPreview(claim: Claim) {
+    const preview = claim.automation.draft_reply_preview?.trim();
+    if (!preview) {
+      setNotice(null);
+      setError("복사할 답변 초안 미리보기가 없습니다.");
+      return;
+    }
+
+    try {
+      await copyText(preview);
+      setError(null);
+      setNotice("자동화 큐의 답변 초안 미리보기를 복사했습니다.");
+    } catch (copyError) {
+      setNotice(null);
+      setError(copyError instanceof Error ? copyError.message : "답변 초안 복사에 실패했습니다.");
     }
   }
 
@@ -163,6 +214,7 @@ export function DashboardPage() {
         </div>
       </header>
 
+      {notice ? <div className="success-state">{notice}</div> : null}
       {loading ? <div className="loading-state">대시보드를 준비하는 중입니다.</div> : null}
       {error ? <div className="error-state">{error}</div> : null}
 
@@ -311,6 +363,9 @@ export function DashboardPage() {
                         <Link href={`/claims/${claim.id}`} className="button ghost">
                           Open Claim
                         </Link>
+                        <button className="button secondary" type="button" onClick={() => handleCopyDraftPreview(claim)}>
+                          Copy Draft
+                        </button>
                         <button
                           className="button"
                           type="button"
