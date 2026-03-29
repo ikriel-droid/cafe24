@@ -180,11 +180,19 @@ def build_claim_automation_summary(claim: Claim) -> dict[str, object]:
             source_event = source_value
 
     follow_up_needed = latest_reply_sent_log is not None and claim.status != ClaimStatus.DONE
+    draft_reply_preview = None
+    if latest_reply is not None:
+        normalized_reply = latest_reply.draft_reply.strip().replace("\r\n", "\n").replace("\n", " ")
+        if normalized_reply:
+            draft_reply_preview = normalized_reply[:120].rstrip()
+            if len(normalized_reply) > 120:
+                draft_reply_preview = f"{draft_reply_preview}..."
 
     return {
         "auto_triaged": auto_triage_log is not None,
         "auto_triaged_at": auto_triage_log.created_at if auto_triage_log else None,
         "reply_ready": latest_reply is not None and bool(latest_reply.draft_reply.strip()),
+        "draft_reply_preview": draft_reply_preview,
         "reply_sent": latest_reply_sent_log is not None,
         "follow_up_needed": follow_up_needed,
         "reply_sent_at": latest_reply_sent_log.created_at if latest_reply_sent_log else None,

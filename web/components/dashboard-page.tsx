@@ -304,6 +304,9 @@ export function DashboardPage() {
                         분류 {Math.round((claim.automation.classification_confidence ?? 0) * 100)}% / 답변{" "}
                         {Math.round((claim.automation.draft_reply_confidence ?? 0) * 100)}%
                       </p>
+                      {claim.automation.draft_reply_preview ? (
+                        <p className="timeline-meta">{claim.automation.draft_reply_preview}</p>
+                      ) : null}
                       <div className="actions">
                         <Link href={`/claims/${claim.id}`} className="button ghost">
                           Open Claim

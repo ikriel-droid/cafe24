@@ -40,6 +40,7 @@ class ClaimAutomationRead(BaseModel):
     auto_triaged: bool
     auto_triaged_at: datetime | None
     reply_ready: bool
+    draft_reply_preview: str | None
     reply_sent: bool
     follow_up_needed: bool
     reply_sent_at: datetime | None

@@ -39,6 +39,7 @@ export interface ClaimAutomation {
   auto_triaged: boolean;
   auto_triaged_at: string | null;
   reply_ready: boolean;
+  draft_reply_preview: string | null;
   reply_sent: boolean;
   follow_up_needed: boolean;
   reply_sent_at: string | null;
