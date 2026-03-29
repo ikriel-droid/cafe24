@@ -31,6 +31,7 @@ export function DashboardPage() {
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [followUpWorkingId, setFollowUpWorkingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function loadDashboard() {
@@ -107,6 +108,23 @@ export function DashboardPage() {
       setError(syncError instanceof Error ? syncError.message : "Cafe24 Mock Sync 실행에 실패했습니다.");
     } finally {
       setWorking(false);
+    }
+  }
+
+  async function handleQuickFollowUpDone(claimId: number) {
+    setFollowUpWorkingId(claimId);
+    setError(null);
+
+    try {
+      await apiFetch<Claim>(`/api/claims/${claimId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "done", actor: "dashboard_operator" }),
+      });
+      await loadDashboard();
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : "후속 확인 완료 처리에 실패했습니다.");
+    } finally {
+      setFollowUpWorkingId(null);
     }
   }
 
@@ -286,7 +304,7 @@ export function DashboardPage() {
               {followUpQueue.length > 0 ? (
                 <div className="timeline">
                   {followUpQueue.map((claim) => (
-                    <Link key={claim.id} href={`/claims/${claim.id}`} className="timeline-item">
+                    <div key={claim.id} className="timeline-item">
                       <div className="actions">
                         <strong>
                           {claim.order_no} / {claim.customer_name}
@@ -301,7 +319,20 @@ export function DashboardPage() {
                           {claim.automation.reply_sent_by ?? "-"}
                         </span>
                       </div>
-                    </Link>
+                      <div className="actions">
+                        <Link href={`/claims/${claim.id}`} className="button ghost">
+                          Open Claim
+                        </Link>
+                        <button
+                          className="button"
+                          type="button"
+                          onClick={() => handleQuickFollowUpDone(claim.id)}
+                          disabled={followUpWorkingId === claim.id}
+                        >
+                          {followUpWorkingId === claim.id ? "처리 중..." : "Follow-up Done"}
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               ) : (
