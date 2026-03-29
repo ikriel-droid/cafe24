@@ -31,6 +31,7 @@ export function DashboardPage() {
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [automationWorkingId, setAutomationWorkingId] = useState<number | null>(null);
   const [followUpWorkingId, setFollowUpWorkingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,6 +109,23 @@ export function DashboardPage() {
       setError(syncError instanceof Error ? syncError.message : "Cafe24 Mock Sync 실행에 실패했습니다.");
     } finally {
       setWorking(false);
+    }
+  }
+
+  async function handleQuickSendDraft(claimId: number) {
+    setAutomationWorkingId(claimId);
+    setError(null);
+
+    try {
+      await apiFetch<Claim>(`/api/claims/${claimId}/send-reply`, {
+        method: "POST",
+        body: JSON.stringify({ actor: "dashboard_operator", mark_done: true }),
+      });
+      await loadDashboard();
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : "자동화 큐 발송 처리에 실패했습니다.");
+    } finally {
+      setAutomationWorkingId(null);
     }
   }
 
@@ -265,12 +283,12 @@ export function DashboardPage() {
             <div className="card stack">
               <div>
                 <h3>자동화 큐</h3>
-                <p>자동 분류와 초안은 준비됐고, 운영자가 최종 확인만 하면 되는 건입니다.</p>
+                <p>자동 분류와 초안이 준비된 건을 여기서 바로 발송까지 이어갈 수 있습니다.</p>
               </div>
               {automationQueue.length > 0 ? (
                 <div className="timeline">
                   {automationQueue.map((claim) => (
-                    <Link key={claim.id} href={`/claims/${claim.id}`} className="timeline-item">
+                    <div key={claim.id} className="timeline-item">
                       <div className="actions">
                         <strong>
                           {claim.order_no} / {claim.customer_name}
@@ -286,7 +304,20 @@ export function DashboardPage() {
                         분류 {Math.round((claim.automation.classification_confidence ?? 0) * 100)}% / 답변{" "}
                         {Math.round((claim.automation.draft_reply_confidence ?? 0) * 100)}%
                       </p>
-                    </Link>
+                      <div className="actions">
+                        <Link href={`/claims/${claim.id}`} className="button ghost">
+                          Open Claim
+                        </Link>
+                        <button
+                          className="button"
+                          type="button"
+                          onClick={() => handleQuickSendDraft(claim.id)}
+                          disabled={automationWorkingId === claim.id}
+                        >
+                          {automationWorkingId === claim.id ? "처리 중..." : "Send Draft + Done"}
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               ) : (
