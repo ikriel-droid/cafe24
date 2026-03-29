@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { Claim, ClaimStatus, ClassificationResponse, DraftReplyResponse, SuggestedAction } from "@/lib/types";
-import { Badge, categoryLabels, formatDate, statusLabels, urgencyLabels } from "@/components/ui";
+import { Badge, categoryLabels, formatAutomationSourceEvent, formatDate, statusLabels, urgencyLabels } from "@/components/ui";
 
 function findLatestSuggestion(actions: SuggestedAction[] | undefined, actionType: string) {
   return actions?.find((action) => action.action_type === actionType) ?? null;
@@ -351,7 +351,9 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
                 {claim.automation.reply_ready ? <Badge tone="teal">답변 초안 준비</Badge> : null}
                 {claim.automation.reply_sent ? <Badge tone="neutral">답변 발송됨</Badge> : null}
                 {claim.automation.follow_up_needed ? <Badge tone="danger">후속 확인 필요</Badge> : null}
-                {claim.automation.source_event ? <Badge tone="neutral">{claim.automation.source_event}</Badge> : null}
+                {claim.automation.source_event ? (
+                  <Badge tone="neutral">{formatAutomationSourceEvent(claim.automation.source_event)}</Badge>
+                ) : null}
               </div>
               <div className="summary-list">
                 <div className="summary-row">

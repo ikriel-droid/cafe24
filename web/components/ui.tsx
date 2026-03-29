@@ -36,6 +36,29 @@ export function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+export function formatAutomationSourceEvent(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const sourceEventLabels: Record<string, string> = {
+    "claim.exchange.requested": "교환 요청 webhook",
+    "claim.return.requested": "반품 요청 webhook",
+    "claim.refund.requested": "환불 요청 webhook",
+    "claim.cancellation.requested": "취소 요청 webhook",
+    "delivery.delay.reported": "배송 지연 알림 webhook",
+    "order.payment.awaiting": "결제 대기 webhook",
+    manual_classify: "수동 재분류",
+    manual_draft_reply: "수동 답변 생성",
+  };
+
+  if (sourceEventLabels[value]) {
+    return sourceEventLabels[value];
+  }
+
+  return value.replace(/[._]/g, " ");
+}
+
 export function Badge({
   children,
   tone = "neutral",

@@ -12,7 +12,7 @@ import {
   DashboardCafe24Overview,
   DashboardSummary,
 } from "@/lib/types";
-import { Badge, categoryLabels, formatDate, statusLabels, urgencyLabels } from "@/components/ui";
+import { Badge, categoryLabels, formatAutomationSourceEvent, formatDate, statusLabels, urgencyLabels } from "@/components/ui";
 
 const categoryOptions: Array<{ value: "" | ClaimCategory; label: string }> = [
   { value: "", label: "전체 카테고리" },
@@ -619,6 +619,9 @@ export function InboxPage() {
                           <span className="claim-automation-meta">
                             분류 {formatPercent(claim.automation.classification_confidence)} / 답변{" "}
                             {formatPercent(claim.automation.draft_reply_confidence)}
+                            {claim.automation.source_event
+                              ? ` · ${formatAutomationSourceEvent(claim.automation.source_event)}`
+                              : ""}
                           </span>
                         ) : null}
                       </div>

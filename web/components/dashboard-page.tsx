@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { Cafe24IntegrationStatus, Claim, DashboardSummary, Policy } from "@/lib/types";
-import { Badge, categoryLabels, formatDate, statusLabels, urgencyLabels } from "@/components/ui";
+import { Badge, categoryLabels, formatAutomationSourceEvent, formatDate, statusLabels, urgencyLabels } from "@/components/ui";
 
 const urgencyRank: Record<Claim["urgency"], number> = {
   high: 3,
@@ -360,6 +360,9 @@ export function DashboardPage() {
                       <div className="actions">
                         <Badge tone="teal">답변 초안 준비</Badge>
                         <Badge tone="neutral">{categoryLabels[claim.category]}</Badge>
+                        {claim.automation.source_event ? (
+                          <Badge tone="neutral">{formatAutomationSourceEvent(claim.automation.source_event)}</Badge>
+                        ) : null}
                       </div>
                       <p className="muted">
                         분류 {Math.round((claim.automation.classification_confidence ?? 0) * 100)}% / 답변{" "}
@@ -418,6 +421,9 @@ export function DashboardPage() {
                       {claim.reason_preview ? <p className="timeline-meta">{claim.reason_preview}</p> : null}
                       <div className="actions">
                         <Badge tone="teal">{statusLabels[claim.status]}</Badge>
+                        {claim.automation.source_event ? (
+                          <Badge tone="neutral">{formatAutomationSourceEvent(claim.automation.source_event)}</Badge>
+                        ) : null}
                         <span className="muted">
                           {claim.automation.reply_sent_at ? formatDate(claim.automation.reply_sent_at) : "-"} /{" "}
                           {claim.automation.reply_sent_by ?? "-"}
