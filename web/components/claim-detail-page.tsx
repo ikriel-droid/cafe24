@@ -24,6 +24,7 @@ function formatPercent(value: number | null | undefined) {
   if (value == null) {
     return "-";
   }
+
   return `${Math.round(value * 100)}%`;
 }
 
@@ -44,6 +45,12 @@ async function copyText(value: string) {
   document.body.removeChild(helper);
 }
 
+function toneForUrgency(urgency: Claim["urgency"]) {
+  if (urgency === "high") return "danger";
+  if (urgency === "medium") return "accent";
+  return "teal";
+}
+
 export function ClaimDetailPage({ claimId }: { claimId: string }) {
   const [claim, setClaim] = useState<Claim | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,11 +64,12 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
   async function loadClaim() {
     setLoading(true);
     setError(null);
+
     try {
       const data = await apiFetch<Claim>(`/api/claims/${claimId}`);
       setClaim(data);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "상세 정보를 불러오지 못했습니다.");
+      setError(loadError instanceof Error ? loadError.message : "클레임 상세 정보를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
@@ -80,13 +88,24 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
     setReplyDraft(latestReply?.draft_reply ?? "");
   }, [latestReply?.id, latestReply?.draft_reply]);
 
+  useEffect(() => {
+    if (!notice) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setNotice(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
   async function handleStatusChange(status: ClaimStatus) {
     setWorkingAction(status);
+
     try {
       const data = await apiFetch<Claim>(`/api/claims/${claimId}/status`, {
         method: "PATCH",
         body: JSON.stringify({ status, actor: "web_operator" }),
       });
+
       setClaim(data);
       setError(null);
       setNotice(`상태가 ${statusLabels[status]}로 변경되었습니다.`);
@@ -100,6 +119,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
 
   async function handleClassify() {
     setWorkingAction("classify");
+
     try {
       await apiFetch<ClassificationResponse>(`/api/claims/${claimId}/classify`, { method: "POST" });
       await loadClaim();
@@ -107,7 +127,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
       setNotice("AI 분류를 다시 실행했습니다.");
     } catch (actionError) {
       setNotice(null);
-      setError(actionError instanceof Error ? actionError.message : "분류에 실패했습니다.");
+      setError(actionError instanceof Error ? actionError.message : "분류 실행에 실패했습니다.");
     } finally {
       setWorkingAction(null);
     }
@@ -115,14 +135,15 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
 
   async function handleDraftReply() {
     setWorkingAction("draft-reply");
+
     try {
       await apiFetch<DraftReplyResponse>(`/api/claims/${claimId}/draft-reply`, { method: "POST" });
       await loadClaim();
       setError(null);
-      setNotice("답변 초안을 새로 생성했습니다.");
+      setNotice("답변 초안을 다시 생성했습니다.");
     } catch (actionError) {
       setNotice(null);
-      setError(actionError instanceof Error ? actionError.message : "답변 생성에 실패했습니다.");
+      setError(actionError instanceof Error ? actionError.message : "답변 초안 생성에 실패했습니다.");
     } finally {
       setWorkingAction(null);
     }
@@ -131,26 +152,29 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
   async function handleSendReply() {
     if (!replyDraft.trim()) {
       setNotice(null);
-      setError("발송할 답변 초안이 없습니다. 먼저 초안을 생성하거나 내용을 입력해 주세요.");
+      setError("보낼 답변 초안이 없습니다. 먼저 초안을 생성하거나 내용을 입력해 주세요.");
       return;
     }
 
     setWorkingAction("send-reply");
+
     try {
       const payload =
         isReplyEdited || !hasGeneratedReply
           ? { reply_body: replyDraft.trim(), actor: "web_operator", mark_done: closeAfterSend }
           : { actor: "web_operator", mark_done: closeAfterSend };
+
       const data = await apiFetch<Claim>(`/api/claims/${claimId}/send-reply`, {
         method: "POST",
         body: JSON.stringify(payload),
       });
+
       setClaim(data);
       setError(null);
       setNotice(
         closeAfterSend
-          ? "답변을 발송 처리했고 클레임을 완료 상태로 반영했습니다."
-          : "답변을 발송 처리했고 클레임은 현재 상태로 유지했습니다.",
+          ? "답변을 발송하고 클레임을 완료 상태로 반영했습니다."
+          : "답변을 발송했고, 클레임은 현재 상태로 유지했습니다.",
       );
     } catch (actionError) {
       setNotice(null);
@@ -163,7 +187,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
   async function handleCopyReply() {
     if (!replyDraft.trim()) {
       setNotice(null);
-      setError("복사할 답변 초안이 없습니다. 먼저 Re-generate Reply를 실행하거나 내용을 입력해 주세요.");
+      setError("복사할 답변 초안이 없습니다. 먼저 초안을 생성하거나 내용을 입력해 주세요.");
       return;
     }
 
@@ -173,7 +197,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
       setNotice("현재 편집 중인 답변 초안을 클립보드에 복사했습니다.");
     } catch (copyError) {
       setNotice(null);
-      setError(copyError instanceof Error ? copyError.message : "답변 초안 복사에 실패했습니다.");
+      setError(copyError instanceof Error ? copyError.message : "답변 복사에 실패했습니다.");
     }
   }
 
@@ -192,11 +216,13 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
     }
 
     setWorkingAction("add-note");
+
     try {
       const data = await apiFetch<Claim>(`/api/claims/${claimId}/notes`, {
         method: "POST",
         body: JSON.stringify({ note: trimmedNote, actor: "web_operator" }),
       });
+
       setClaim(data);
       setInternalNote("");
       setError(null);
@@ -209,17 +235,8 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
     }
   }
 
-  useEffect(() => {
-    if (!notice) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => setNotice(null), 2600);
-    return () => window.clearTimeout(timer);
-  }, [notice]);
-
   if (loading) {
-    return <div className="loading-state">클레임 상세를 불러오는 중입니다.</div>;
+    return <div className="loading-state">클레임 상세 정보를 불러오는 중입니다.</div>;
   }
 
   if (error && !claim) {
@@ -227,7 +244,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
   }
 
   if (!claim) {
-    return <div className="empty-state">클레임을 찾을 수 없습니다.</div>;
+    return <div className="empty-state">해당 클레임을 찾을 수 없습니다.</div>;
   }
 
   return (
@@ -238,9 +255,27 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
             ← Inbox
           </Link>
           <h2>{claim.order_no}</h2>
-          <p>{claim.customer_name} 고객 문의를 요약, 분류, 답변 초안 기준으로 확인합니다.</p>
+          <p>{claim.customer_name} 고객 문의를 검토하고, 답변 생성과 상태 변경까지 바로 처리할 수 있습니다.</p>
         </div>
       </header>
+
+      {claim.automation.follow_up_needed ? (
+        <section className="health-banner">
+          <div className="actions">
+            <Badge tone="danger">후속 확인 필요</Badge>
+            <span className="muted">
+              {claim.automation.reply_sent_at ? formatDate(claim.automation.reply_sent_at) : "-"} /{" "}
+              {claim.automation.reply_sent_by ?? "-"}
+            </span>
+          </div>
+          <p>답변은 발송됐지만 아직 완료 처리되지 않았습니다. 고객 회신 여부나 추가 작업을 확인한 뒤 마감해 주세요.</p>
+          <div className="actions">
+            <button className="button" onClick={() => handleStatusChange("done")} disabled={!!workingAction}>
+              Follow-up Done
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {notice ? <div className="success-state">{notice}</div> : null}
       {error ? <div className="error-state">{error}</div> : null}
@@ -254,9 +289,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
           <div className="status-line">
             <Badge tone="neutral">{categoryLabels[claim.category]}</Badge>
             <Badge tone="teal">{statusLabels[claim.status]}</Badge>
-            <Badge tone={claim.urgency === "high" ? "danger" : claim.urgency === "medium" ? "accent" : "teal"}>
-              긴급도 {urgencyLabels[claim.urgency]}
-            </Badge>
+            <Badge tone={toneForUrgency(claim.urgency)}>긴급도 {urgencyLabels[claim.urgency]}</Badge>
           </div>
           <div className="summary-list">
             <div className="summary-row">
@@ -280,8 +313,8 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
 
         <div className="card stack">
           <div>
-            <h3>액션</h3>
-            <p>상태 변경과 AI 재실행, 답변 발송 처리를 이 화면에서 바로 진행합니다.</p>
+            <h3>운영 액션</h3>
+            <p>상태 변경, AI 재실행, 답변 발송까지 이 화면에서 바로 처리할 수 있습니다.</p>
           </div>
           <div className="actions">
             <button className="button" onClick={() => handleStatusChange("approved")} disabled={!!workingAction}>
@@ -291,7 +324,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
               Reject
             </button>
             <button className="button ghost" onClick={() => handleStatusChange("done")} disabled={!!workingAction}>
-              Mark Done
+              {claim.automation.follow_up_needed ? "Follow-up Done" : "Mark Done"}
             </button>
           </div>
           <div className="actions">
@@ -309,7 +342,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
         <div className="card stack">
           <div>
             <h3>자동 triage 요약</h3>
-            <p>Cafe24 mock webhook으로 자동 분류와 초안 생성이 되었는지 바로 확인합니다.</p>
+            <p>Cafe24 webhook 기반 자동 분류와 답변 초안 준비 상태를 바로 확인합니다.</p>
           </div>
           {claim.automation.auto_triaged ? (
             <>
@@ -317,6 +350,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
                 <Badge tone="accent">자동 분류 완료</Badge>
                 {claim.automation.reply_ready ? <Badge tone="teal">답변 초안 준비</Badge> : null}
                 {claim.automation.reply_sent ? <Badge tone="neutral">답변 발송됨</Badge> : null}
+                {claim.automation.follow_up_needed ? <Badge tone="danger">후속 확인 필요</Badge> : null}
                 {claim.automation.source_event ? <Badge tone="neutral">{claim.automation.source_event}</Badge> : null}
               </div>
               <div className="summary-list">
@@ -333,24 +367,28 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
                   <strong>{formatPercent(claim.automation.draft_reply_confidence)}</strong>
                 </div>
                 <div className="summary-row">
-                  <span className="muted">발송 시각</span>
+                  <span className="muted">답변 발송 시각</span>
                   <strong>{claim.automation.reply_sent_at ? formatDate(claim.automation.reply_sent_at) : "-"}</strong>
                 </div>
                 <div className="summary-row">
-                  <span className="muted">발송 담당자</span>
+                  <span className="muted">답변 담당자</span>
                   <strong>{claim.automation.reply_sent_by ?? "-"}</strong>
+                </div>
+                <div className="summary-row">
+                  <span className="muted">후속 확인</span>
+                  <strong>{claim.automation.follow_up_needed ? "필요" : "없음"}</strong>
                 </div>
               </div>
             </>
           ) : (
-            <div className="empty-state inline-state">아직 webhook 기반 자동 triage 이력은 없습니다.</div>
+            <div className="empty-state inline-state">아직 webhook 기반 자동 triage 이력이 없습니다.</div>
           )}
         </div>
 
         <div className="card stack">
           <div>
             <h3>고객 메시지 타임라인</h3>
-            <p>고객과 운영자 메시지를 시간순으로 확인합니다.</p>
+            <p>고객과 운영자, 시스템 메시지를 시간순으로 확인합니다.</p>
           </div>
           <div className="timeline">
             {claim.messages?.map((message) => (
@@ -390,7 +428,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
         <div className="card stack">
           <div>
             <h3>추천 답변</h3>
-            <p>판매자 정책을 반영한 답변 초안입니다. 발송 처리 시 타임라인과 감사 로그에 같이 남습니다.</p>
+            <p>매장 정책을 반영한 답변 초안입니다. 편집 후 바로 발송 처리할 수 있습니다.</p>
           </div>
           <div className="summary-list">
             <div className="summary-row">
@@ -406,7 +444,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
             className="textarea reply-editor"
             value={replyDraft}
             onChange={(event) => setReplyDraft(event.target.value)}
-            placeholder="아직 답변 초안이 없습니다. Re-generate Reply를 실행해 주세요."
+            placeholder="아직 답변 초안이 없습니다. Re-generate Reply를 먼저 실행해 주세요."
           />
           <p className="muted">{latestReply?.rationale ?? ""}</p>
           <div className="actions">
@@ -441,13 +479,13 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
       <section className="card stack">
         <div>
           <h3>내부 처리 메모</h3>
-          <p>고객에게 보이지 않는 운영 메모를 남겨 다음 담당자와 공유합니다.</p>
+          <p>고객에게는 보이지 않는 운영 메모를 남겨 다음 담당자와 공유합니다.</p>
         </div>
         <textarea
           className="textarea reply-editor"
           value={internalNote}
           onChange={(event) => setInternalNote(event.target.value)}
-          placeholder="예: 고객이 파손 사진 추가 전달 예정, 오늘 15시 이후 재회신"
+          placeholder="예: 고객이 추가 사진 전달 예정, 오늘 15시 이후 재확인 예정"
         />
         <div className="actions">
           <button className="button secondary" onClick={handleAddInternalNote} disabled={!internalNote.trim() || !!workingAction}>
@@ -459,7 +497,7 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
       <section className="card stack">
         <div>
           <h3>감사 로그</h3>
-          <p>분류, 답변 생성, 발송 처리, 상태 변경, 메모 저장 이력을 추적합니다.</p>
+          <p>분류, 답변 생성, 발송 처리, 상태 변경, 메모 저장 이력을 시간순으로 확인합니다.</p>
         </div>
         <div className="timeline">
           {claim.audit_logs?.map((log) => {
