@@ -44,12 +44,20 @@ from app.core.config import get_settings
 router = APIRouter()
 
 
+def build_reason_preview(reason_text: str, limit: int = 90) -> str:
+    normalized_reason = " ".join(reason_text.split())
+    if len(normalized_reason) <= limit:
+        return normalized_reason
+    return f"{normalized_reason[:limit].rstrip()}..."
+
+
 def build_claim_base_payload(claim: Claim) -> dict[str, object]:
     return {
         "id": claim.id,
         "order_no": claim.order_no,
         "customer_name": claim.customer_name,
         "product_name": claim.product_name,
+        "reason_preview": build_reason_preview(claim.reason_text),
         "category": claim.category,
         "status": claim.status,
         "urgency": claim.urgency,

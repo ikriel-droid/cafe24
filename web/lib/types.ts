@@ -55,6 +55,7 @@ export interface Claim {
   order_no: string;
   customer_name: string;
   product_name: string;
+  reason_preview?: string;
   category: ClaimCategory;
   status: ClaimStatus;
   urgency: ClaimUrgency;

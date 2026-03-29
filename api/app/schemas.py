@@ -55,6 +55,7 @@ class ClaimListItem(ORMModel):
     order_no: str
     customer_name: str
     product_name: str
+    reason_preview: str
     category: ClaimCategory
     status: ClaimStatus
     urgency: ClaimUrgency

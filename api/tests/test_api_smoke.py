@@ -146,7 +146,9 @@ def test_claims_endpoint_bootstraps_database(monkeypatch) -> None:
     with TestClient(app) as client:
         response = client.get("/api/claims")
         assert response.status_code == 200
-        assert len(response.json()) >= 12
+        payload = response.json()
+        assert len(payload) >= 12
+        assert payload[0]["reason_preview"]
 
 
 def test_claims_endpoint_supports_search(monkeypatch) -> None:
@@ -298,6 +300,7 @@ def test_cafe24_mock_webhook_increases_pending_count(monkeypatch) -> None:
         assert claim_list_item["automation"]["auto_triaged"] is True
         assert claim_list_item["automation"]["reply_ready"] is True
         assert claim_list_item["automation"]["draft_reply_preview"] is not None
+        assert claim_list_item["reason_preview"]
 
 
 def test_cafe24_callback_redirects_to_console(monkeypatch) -> None:

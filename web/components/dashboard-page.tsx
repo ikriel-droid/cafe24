@@ -326,6 +326,7 @@ export function DashboardPage() {
                         <Badge tone={toneForUrgency(claim.urgency)}>{urgencyLabels[claim.urgency]}</Badge>
                       </div>
                       <p>{claim.product_name}</p>
+                      {claim.reason_preview ? <p className="timeline-meta">{claim.reason_preview}</p> : null}
                       <div className="actions">
                         <Badge tone="neutral">{categoryLabels[claim.category]}</Badge>
                         <Badge tone="teal">{statusLabels[claim.status]}</Badge>
@@ -355,6 +356,7 @@ export function DashboardPage() {
                         <Badge tone="accent">자동 분류</Badge>
                       </div>
                       <p>{claim.product_name}</p>
+                      {claim.reason_preview ? <p className="timeline-meta">{claim.reason_preview}</p> : null}
                       <div className="actions">
                         <Badge tone="teal">답변 초안 준비</Badge>
                         <Badge tone="neutral">{categoryLabels[claim.category]}</Badge>
@@ -413,6 +415,7 @@ export function DashboardPage() {
                         <Badge tone="danger">후속 확인 필요</Badge>
                       </div>
                       <p>{claim.product_name}</p>
+                      {claim.reason_preview ? <p className="timeline-meta">{claim.reason_preview}</p> : null}
                       <div className="actions">
                         <Badge tone="teal">{statusLabels[claim.status]}</Badge>
                         <span className="muted">
