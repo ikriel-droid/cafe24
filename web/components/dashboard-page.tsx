@@ -50,6 +50,7 @@ export function DashboardPage() {
   const [working, setWorking] = useState(false);
   const [automationWorkingId, setAutomationWorkingId] = useState<number | null>(null);
   const [followUpWorkingId, setFollowUpWorkingId] = useState<number | null>(null);
+  const [copyWorkingId, setCopyWorkingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -180,20 +181,26 @@ export function DashboardPage() {
   }
 
   async function handleCopyDraftPreview(claim: Claim) {
-    const preview = claim.automation.draft_reply_preview?.trim();
-    if (!preview) {
-      setNotice(null);
-      setError("복사할 답변 초안 미리보기가 없습니다.");
-      return;
-    }
+    setCopyWorkingId(claim.id);
+    setNotice(null);
+    setError(null);
 
     try {
-      await copyText(preview);
-      setError(null);
-      setNotice("자동화 큐의 답변 초안 미리보기를 복사했습니다.");
+      const detail = await apiFetch<Claim>(`/api/claims/${claim.id}`);
+      const latestDraft = detail.suggested_actions?.find((action) => action.action_type === "draft_reply")?.draft_reply?.trim();
+      const copyValue = latestDraft || claim.automation.draft_reply_preview?.trim();
+
+      if (!copyValue) {
+        throw new Error("복사할 답변 초안이 없습니다.");
+      }
+
+      await copyText(copyValue);
+      setNotice("자동화 큐의 최신 전체 답변 초안을 복사했습니다.");
     } catch (copyError) {
       setNotice(null);
       setError(copyError instanceof Error ? copyError.message : "답변 초안 복사에 실패했습니다.");
+    } finally {
+      setCopyWorkingId(null);
     }
   }
 
@@ -363,8 +370,13 @@ export function DashboardPage() {
                         <Link href={`/claims/${claim.id}`} className="button ghost">
                           Open Claim
                         </Link>
-                        <button className="button secondary" type="button" onClick={() => handleCopyDraftPreview(claim)}>
-                          Copy Draft
+                        <button
+                          className="button secondary"
+                          type="button"
+                          onClick={() => handleCopyDraftPreview(claim)}
+                          disabled={copyWorkingId === claim.id}
+                        >
+                          {copyWorkingId === claim.id ? "복사 중..." : "Copy Draft"}
                         </button>
                         <button
                           className="button"
