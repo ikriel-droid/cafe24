@@ -429,3 +429,16 @@ def test_claims_and_summary_support_automation_filters(monkeypatch) -> None:
         assert summary_payload["total_claims"] == 1
         assert summary_payload["auto_triaged_claims"] == 1
         assert summary_payload["reply_ready_claims"] == 1
+
+        source_filtered_claims = client.get("/api/claims?source_event=claim.exchange.requested")
+        assert source_filtered_claims.status_code == 200
+        source_filtered_payload = source_filtered_claims.json()
+        assert len(source_filtered_payload) == 1
+        assert source_filtered_payload[0]["order_no"] == "CM-240301-001"
+        assert source_filtered_payload[0]["automation"]["source_event"] == "claim.exchange.requested"
+
+        source_filtered_summary = client.get("/api/dashboard/summary?source_event=claim.exchange.requested")
+        assert source_filtered_summary.status_code == 200
+        source_summary_payload = source_filtered_summary.json()
+        assert source_summary_payload["total_claims"] == 1
+        assert source_summary_payload["auto_triaged_claims"] == 1

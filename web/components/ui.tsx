@@ -46,6 +46,7 @@ export function formatAutomationSourceEvent(value: string | null | undefined) {
     "claim.return.requested": "반품 요청 webhook",
     "claim.refund.requested": "환불 요청 webhook",
     "claim.cancellation.requested": "취소 요청 webhook",
+    "order.cancel.requested": "주문 취소 webhook",
     "delivery.delay.reported": "배송 지연 알림 webhook",
     "order.payment.awaiting": "결제 대기 webhook",
     manual_classify: "수동 재분류",

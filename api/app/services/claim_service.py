@@ -86,6 +86,7 @@ def list_claims(
     category: ClaimCategory | None = None,
     status_value: ClaimStatus | None = None,
     search_text: str | None = None,
+    source_event: str | None = None,
     auto_triaged: bool | None = None,
     reply_ready: bool | None = None,
     reply_sent: bool | None = None,
@@ -119,12 +120,20 @@ def list_claims(
             )
     claims = list(session.scalars(query))
 
-    if auto_triaged is None and reply_ready is None and reply_sent is None and follow_up_needed is None:
+    if (
+        auto_triaged is None
+        and reply_ready is None
+        and reply_sent is None
+        and follow_up_needed is None
+        and source_event is None
+    ):
         return claims
 
     filtered_claims: list[Claim] = []
     for claim in claims:
         automation = build_claim_automation_summary(claim)
+        if source_event is not None and automation["source_event"] != source_event:
+            continue
         if auto_triaged is not None and automation["auto_triaged"] != auto_triaged:
             continue
         if reply_ready is not None and automation["reply_ready"] != reply_ready:
@@ -436,6 +445,7 @@ def get_dashboard_summary(
     category: ClaimCategory | None = None,
     status_value: ClaimStatus | None = None,
     search_text: str | None = None,
+    source_event: str | None = None,
     auto_triaged: bool | None = None,
     reply_ready: bool | None = None,
     reply_sent: bool | None = None,
@@ -447,6 +457,7 @@ def get_dashboard_summary(
         category=category,
         status_value=status_value,
         search_text=search_text,
+        source_event=source_event,
         auto_triaged=auto_triaged,
         reply_ready=reply_ready,
         reply_sent=reply_sent,

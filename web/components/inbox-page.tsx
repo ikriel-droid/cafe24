@@ -35,6 +35,14 @@ const statusOptions: Array<{ value: "" | ClaimStatus; label: string }> = [
   { value: "done", label: "완료" },
 ];
 
+const sourceEventOptions = [
+  { value: "", label: "전체 자동화 출처" },
+  { value: "claim.exchange.requested", label: "교환 요청 webhook" },
+  { value: "claim.return.requested", label: "반품 요청 webhook" },
+  { value: "order.cancel.requested", label: "주문 취소 webhook" },
+  { value: "delivery.delay.reported", label: "배송 지연 알림 webhook" },
+] as const;
+
 type SortOption = "priority" | "newest" | "oldest" | "customer";
 
 const sortOptions: Array<{ value: SortOption; label: string }> = [
@@ -144,6 +152,7 @@ export function InboxPage() {
   const [syncStatus, setSyncStatus] = useState<Cafe24IntegrationStatus | null>(null);
   const [category, setCategory] = useState<"" | ClaimCategory>("");
   const [status, setStatus] = useState<"" | ClaimStatus>("");
+  const [sourceEvent, setSourceEvent] = useState<(typeof sourceEventOptions)[number]["value"]>("");
   const [sortBy, setSortBy] = useState<SortOption>("priority");
   const [searchText, setSearchText] = useState("");
   const [autoTriagedOnly, setAutoTriagedOnly] = useState(false);
@@ -163,10 +172,16 @@ export function InboxPage() {
     const params = new URLSearchParams(window.location.search);
     const nextCategory = params.get("category");
     const nextStatus = params.get("status");
+    const nextSourceEvent = params.get("source_event");
     const nextSort = params.get("sort");
 
     setCategory(categoryOptions.some((option) => option.value === nextCategory) ? (nextCategory as "" | ClaimCategory) : "");
     setStatus(statusOptions.some((option) => option.value === nextStatus) ? (nextStatus as "" | ClaimStatus) : "");
+    setSourceEvent(
+      sourceEventOptions.some((option) => option.value === nextSourceEvent)
+        ? (nextSourceEvent as (typeof sourceEventOptions)[number]["value"])
+        : "",
+    );
     setSortBy(sortOptions.some((option) => option.value === nextSort) ? (nextSort as SortOption) : "priority");
     setSearchText(params.get("q") ?? "");
     setAutoTriagedOnly(params.get("auto_triaged") === "true");
@@ -191,6 +206,7 @@ export function InboxPage() {
       const search = new URLSearchParams();
       if (category) search.set("category", category);
       if (status) search.set("status", status);
+      if (sourceEvent) search.set("source_event", sourceEvent);
       if (deferredSearchText.trim()) search.set("q", deferredSearchText.trim());
       if (autoTriagedOnly) search.set("auto_triaged", "true");
       if (replyReadyOnly) search.set("reply_ready", "true");
@@ -245,7 +261,7 @@ export function InboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [category, status, deferredSearchText, autoTriagedOnly, replyReadyOnly, replySentOnly, followUpNeededOnly, isInitialized]);
+  }, [category, status, sourceEvent, deferredSearchText, autoTriagedOnly, replyReadyOnly, replySentOnly, followUpNeededOnly, isInitialized]);
 
   useEffect(() => {
     if (!isInitialized) {
@@ -255,6 +271,7 @@ export function InboxPage() {
     const params = new URLSearchParams();
     if (category) params.set("category", category);
     if (status) params.set("status", status);
+    if (sourceEvent) params.set("source_event", sourceEvent);
     if (sortBy !== "priority") params.set("sort", sortBy);
     if (searchText.trim()) params.set("q", searchText.trim());
     if (autoTriagedOnly) params.set("auto_triaged", "true");
@@ -265,7 +282,7 @@ export function InboxPage() {
     const query = params.toString();
     const nextUrl = query ? `/inbox?${query}` : "/inbox";
     window.history.replaceState(null, "", nextUrl);
-  }, [category, status, sortBy, searchText, autoTriagedOnly, replyReadyOnly, replySentOnly, followUpNeededOnly, isInitialized]);
+  }, [category, status, sourceEvent, sortBy, searchText, autoTriagedOnly, replyReadyOnly, replySentOnly, followUpNeededOnly, isInitialized]);
 
   async function handleRunMockSync() {
     setSyncWorking(true);
@@ -289,6 +306,7 @@ export function InboxPage() {
     setSearchText("");
     setCategory("");
     setStatus("");
+    setSourceEvent("");
     setSortBy("priority");
     setAutoTriagedOnly(false);
     setReplyReadyOnly(false);
@@ -505,6 +523,15 @@ export function InboxPage() {
               ))}
             </select>
           </div>
+          <div className="field">
+            <select value={sourceEvent} onChange={(event) => setSourceEvent(event.target.value as (typeof sourceEventOptions)[number]["value"])}>
+              {sourceEventOptions.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="field compact-field">
             <select value={sortBy} onChange={(event) => setSortBy(event.target.value as SortOption)}>
               {sortOptions.map((option) => (
@@ -620,7 +647,7 @@ export function InboxPage() {
                             분류 {formatPercent(claim.automation.classification_confidence)} / 답변{" "}
                             {formatPercent(claim.automation.draft_reply_confidence)}
                             {claim.automation.source_event
-                              ? ` · ${formatAutomationSourceEvent(claim.automation.source_event)}`
+                              ? ` / ${formatAutomationSourceEvent(claim.automation.source_event)}`
                               : ""}
                           </span>
                         ) : null}
