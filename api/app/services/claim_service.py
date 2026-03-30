@@ -164,7 +164,11 @@ def get_claim(session: Session, claim_id: int) -> Claim:
 
 def build_claim_automation_summary(claim: Claim) -> dict[str, object]:
     auto_triage_log = next(
-        (log for log in claim.audit_logs if log.event_type == "cafe24_mock_webhook_auto_triaged"),
+        (
+            log
+            for log in claim.audit_logs
+            if log.event_type in {"cafe24_mock_webhook_auto_triaged", "cafe24_live_sync_auto_triaged"}
+        ),
         None,
     )
     latest_reply = next(

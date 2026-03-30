@@ -69,6 +69,23 @@ class Cafe24OAuthClient:
             },
         )
 
+    def list_orders(self, mall_id: str, access_token: str, *, limit: int = 20) -> list[dict[str, Any]]:
+        data = self._request_json(
+            "GET",
+            f"https://{mall_id}.cafe24api.com/api/v2/admin/orders",
+            access_token=access_token,
+            params={"limit": str(limit)},
+        )
+        return _extract_collection(data, "orders")
+
+    def list_order_shipments(self, mall_id: str, access_token: str, order_id: str) -> list[dict[str, Any]]:
+        data = self._request_json(
+            "GET",
+            f"https://{mall_id}.cafe24api.com/api/v2/admin/orders/{order_id}/shipments",
+            access_token=access_token,
+        )
+        return _extract_collection(data, "shipments")
+
     def _request_tokens(self, mall_id: str, payload: dict[str, str]) -> Cafe24OAuthTokens:
         response = httpx.post(
             f"https://{mall_id}.cafe24api.com/api/v2/oauth/token",
@@ -87,6 +104,32 @@ class Cafe24OAuthClient:
             scopes=_parse_scopes(data.get("scope") or data.get("scopes")),
             raw_response=data,
         )
+
+    def _request_json(
+        self,
+        method: str,
+        url: str,
+        *,
+        access_token: str,
+        params: dict[str, str] | None = None,
+    ) -> dict[str, Any] | list[dict[str, Any]]:
+        response = httpx.request(
+            method=method,
+            url=url,
+            params=params,
+            headers={
+                "Accept": "application/json",
+                "Authorization": f"Bearer {access_token}",
+            },
+            timeout=self.timeout_seconds,
+        )
+        response.raise_for_status()
+        data = response.json()
+        if isinstance(data, dict):
+            return data
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)]
+        return {}
 
 
 def _parse_scopes(value: str | list[str] | None) -> list[str]:
@@ -120,3 +163,16 @@ def _parse_expiry(payload: dict[str, Any], *candidate_keys: str) -> datetime | N
             except ValueError:
                 continue
     return None
+
+
+def _extract_collection(payload: dict[str, Any] | list[dict[str, Any]], preferred_key: str) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return payload
+
+    candidates = [preferred_key, "orders", "shipments", "items", "results", "data"]
+    for key in candidates:
+        value = payload.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+
+    return []

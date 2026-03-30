@@ -11,7 +11,7 @@ function toneForResult(status: Cafe24IntegrationStatus | null) {
     return "neutral";
   }
 
-  if (status.last_sync_result === "mock_completed") {
+  if (status.last_sync_result === "mock_completed" || status.last_sync_result === "live_completed") {
     return "teal";
   }
 
@@ -128,6 +128,24 @@ export function Cafe24IntegrationPage() {
     }
   }
 
+  async function handleLiveSync() {
+    setWorking(true);
+    setError(null);
+
+    try {
+      const data = await apiFetch<Cafe24IntegrationStatus>("/api/integrations/cafe24/live-sync", {
+        method: "POST",
+      });
+      setStatus(data);
+      setNotice("Cafe24 Live Sync를 실행했습니다.");
+    } catch (syncError) {
+      setNotice(null);
+      setError(syncError instanceof Error ? syncError.message : "Cafe24 Live Sync 실행에 실패했습니다.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
   async function handleClearActivity() {
     setWorking(true);
     setError(null);
@@ -177,6 +195,14 @@ export function Cafe24IntegrationPage() {
     if (status.next_action_type === "mock_sync") {
       return (
         <button className="button" onClick={handleMockSync} disabled={working}>
+          {status.next_action_label}
+        </button>
+      );
+    }
+
+    if (status.next_action_type === "live_sync") {
+      return (
+        <button className="button" onClick={handleLiveSync} disabled={working}>
           {status.next_action_label}
         </button>
       );

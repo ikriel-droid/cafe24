@@ -74,7 +74,7 @@ function toneForUrgency(urgency: Claim["urgency"]) {
 
 function toneForSyncResult(status: Cafe24IntegrationStatus | null) {
   if (!status) return "neutral";
-  if (status.last_sync_result === "mock_completed") return "teal";
+  if (status.last_sync_result === "mock_completed" || status.last_sync_result === "live_completed") return "teal";
   return "accent";
 }
 
@@ -284,12 +284,12 @@ export function InboxPage() {
     window.history.replaceState(null, "", nextUrl);
   }, [category, status, sourceEvent, sortBy, searchText, autoTriagedOnly, replyReadyOnly, replySentOnly, followUpNeededOnly, isInitialized]);
 
-  async function handleRunMockSync() {
+  async function handleSyncAction(endpoint: string, fallbackMessage: string) {
     setSyncWorking(true);
     setSyncError(null);
 
     try {
-      const data = await apiFetch<Cafe24IntegrationStatus>("/api/integrations/cafe24/mock-sync", {
+      const data = await apiFetch<Cafe24IntegrationStatus>(endpoint, {
         method: "POST",
       });
 
@@ -300,6 +300,14 @@ export function InboxPage() {
     } finally {
       setSyncWorking(false);
     }
+  }
+
+  async function handleRunMockSync() {
+    await handleSyncAction("/api/integrations/cafe24/mock-sync", "Cafe24 Mock Sync 실행에 실패했습니다.");
+  }
+
+  async function handleRunLiveSync() {
+    await handleSyncAction("/api/integrations/cafe24/live-sync", "Cafe24 Live Sync 실행에 실패했습니다.");
   }
 
   function resetFilters() {
@@ -342,8 +350,13 @@ export function InboxPage() {
               <Link href="/integrations/cafe24" className="button ghost">
                 Open Cafe24 Console
               </Link>
-              <button className="button" type="button" onClick={handleRunMockSync} disabled={syncWorking}>
-                Run Mock Sync
+              <button
+                className="button"
+                type="button"
+                onClick={syncStatus.connection_mode === "live_connected" ? handleRunLiveSync : handleRunMockSync}
+                disabled={syncWorking}
+              >
+                {syncStatus.connection_mode === "live_connected" ? "Run Live Sync" : "Run Mock Sync"}
               </button>
             </div>
           </div>
@@ -380,6 +393,10 @@ export function InboxPage() {
               <span className="muted">다음 액션</span>
               {syncStatus.next_action_type === "mock_sync" ? (
                 <button className="button secondary" type="button" onClick={handleRunMockSync} disabled={syncWorking}>
+                  {syncStatus.next_action_label}
+                </button>
+              ) : syncStatus.next_action_type === "live_sync" ? (
+                <button className="button secondary" type="button" onClick={handleRunLiveSync} disabled={syncWorking}>
                   {syncStatus.next_action_label}
                 </button>
               ) : syncStatus.next_action_href ? (
@@ -483,6 +500,10 @@ export function InboxPage() {
               <div className="actions">
                 {summary.cafe24.next_action_type === "mock_sync" ? (
                   <button className="button secondary" type="button" onClick={handleRunMockSync} disabled={syncWorking}>
+                    {summary.cafe24.next_action_label}
+                  </button>
+                ) : summary.cafe24.next_action_type === "live_sync" ? (
+                  <button className="button secondary" type="button" onClick={handleRunLiveSync} disabled={syncWorking}>
                     {summary.cafe24.next_action_label}
                   </button>
                 ) : summary.cafe24.next_action_href ? (

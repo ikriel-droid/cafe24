@@ -102,7 +102,7 @@ npm.cmd run dev
 Open [http://127.0.0.1:3000/dashboard](http://127.0.0.1:3000/dashboard).
 The root route redirects to `/dashboard`, and `/inbox` remains the working queue view.
 
-The Cafe24 placeholder console is available at `/integrations/cafe24` and supports offline Mock Sync, mock webhook simulation, and simulated OAuth callback testing.
+The Cafe24 console is available at `/integrations/cafe24` and supports offline Mock Sync, simulated OAuth callback testing, live OAuth/token storage, live webhook verification, and manual Live Sync execution.
 
 ## One-Command Local Start
 
@@ -201,7 +201,7 @@ docker compose logs -f web
 
 - Authentication and tenant isolation are intentionally omitted.
 - Redis is provisioned but not actively used yet beyond the integration boundary placeholder.
-- Cafe24 OAuth, webhooks, and sync are scaffolded only and do not perform live network calls.
+- Cafe24 OAuth, live webhook verification, and manual Live Sync now perform real network calls when Cafe24 credentials are configured, but retry policies, background jobs, and full production hardening are still pending.
 - OpenAI integration is a stub and always falls back to the deterministic mock logic.
 - The UI focuses on clarity and local runnability, not production-grade design coverage.
 - Docker Compose has not been executed in this workspace because Docker is not installed here, so the container definitions were added conservatively and kept close to the already verified local commands.

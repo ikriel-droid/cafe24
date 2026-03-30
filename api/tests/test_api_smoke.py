@@ -401,12 +401,117 @@ def test_cafe24_live_oauth_connects_and_refreshes_token(monkeypatch) -> None:
         assert status_payload["connection_mode"] == "live_connected"
         assert status_payload["mall_id"] == "alpha-seller"
         assert status_payload["access_token_expires_at"] is not None
+        assert status_payload["next_action_type"] == "live_sync"
 
         refresh_response = client.post("/api/integrations/cafe24/refresh-token")
         assert refresh_response.status_code == 200
         refresh_payload = refresh_response.json()
         assert refresh_payload["status"] == "refreshed"
         assert refresh_payload["access_token_expires_at"] is not None
+
+
+def test_cafe24_live_sync_imports_orders_shipments_and_claims(monkeypatch) -> None:
+    temp_root = Path(".tmp") / "tests" / "cafe24-live-sync"
+    if temp_root.exists():
+        shutil.rmtree(temp_root)
+    temp_root.mkdir(parents=True, exist_ok=True)
+
+    database_url = f"sqlite:///{temp_root.joinpath('claimmate-test.db').resolve().as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("SEED_DEMO_DATA", "true")
+    monkeypatch.setenv("CAFE24_CLIENT_ID", "demo-client")
+    monkeypatch.setenv("CAFE24_CLIENT_SECRET", "demo-secret")
+    monkeypatch.setenv("CAFE24_REDIRECT_URI", "http://127.0.0.1:8000/api/integrations/cafe24/callback")
+    get_settings.cache_clear()
+    reset_engine()
+
+    def fake_exchange_code(self, mall_id: str, code: str) -> Cafe24OAuthTokens:
+        assert mall_id == "alpha-seller"
+        assert code == "live-code"
+        return Cafe24OAuthTokens(
+            access_token="live-access-token",
+            refresh_token="live-refresh-token",
+            token_type="Bearer",
+            access_token_expires_at=datetime.now(UTC) + timedelta(hours=2),
+            refresh_token_expires_at=datetime.now(UTC) + timedelta(days=30),
+            scopes=["mall.read_order", "mall.read_claim"],
+            raw_response={"access_token": "live-access-token"},
+        )
+
+    def fake_list_orders(self, mall_id: str, access_token: str, *, limit: int = 20) -> list[dict[str, object]]:
+        assert mall_id == "alpha-seller"
+        assert access_token == "live-access-token"
+        assert limit == 20
+        return [
+            {
+                "order_id": "9001",
+                "order_no": "CAFE24-9001",
+                "buyer": {"name": "김민지"},
+                "items": [{"product_name": "에어핏 셔츠"}],
+                "order_status": "exchange requested",
+            },
+            {
+                "order_id": "9002",
+                "order_no": "CAFE24-9002",
+                "buyer_name": "박지훈",
+                "product_name": "코튼 팬츠",
+                "order_status": "shipping",
+            },
+        ]
+
+    def fake_list_order_shipments(
+        self,
+        mall_id: str,
+        access_token: str,
+        order_id: str,
+    ) -> list[dict[str, object]]:
+        assert mall_id == "alpha-seller"
+        assert access_token == "live-access-token"
+        if order_id == "9001":
+            return [{"shipping_status": "교환 대기"}]
+        if order_id == "9002":
+            return [{"shipping_status": "delay"}]
+        return []
+
+    monkeypatch.setattr("app.integrations.cafe24.oauth_client.Cafe24OAuthClient.exchange_code", fake_exchange_code)
+    monkeypatch.setattr("app.integrations.cafe24.oauth_client.Cafe24OAuthClient.list_orders", fake_list_orders)
+    monkeypatch.setattr(
+        "app.integrations.cafe24.oauth_client.Cafe24OAuthClient.list_order_shipments",
+        fake_list_order_shipments,
+    )
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        callback = client.get(
+            "/api/integrations/cafe24/callback?code=live-code&state=claimmate-live-1",
+            follow_redirects=False,
+        )
+        assert callback.status_code == 307
+        assert "oauth_result=connected" in callback.headers["location"]
+
+        sync_response = client.post("/api/integrations/cafe24/live-sync")
+        assert sync_response.status_code == 200
+        sync_payload = sync_response.json()
+        assert sync_payload["last_sync_result"] == "live_completed"
+        assert sync_payload["synced_orders"] == 2
+        assert sync_payload["synced_claims"] == 2
+        assert sync_payload["recent_events"][0]["event_type"] == "live_sync"
+        assert sync_payload["next_action_type"] == "open_link"
+
+        claims_response = client.get("/api/claims?q=CAFE24-900")
+        assert claims_response.status_code == 200
+        claims_payload = claims_response.json()
+        assert {claim["order_no"] for claim in claims_payload} == {"CAFE24-9001", "CAFE24-9002"}
+        categories = {claim["order_no"]: claim["category"] for claim in claims_payload}
+        assert categories["CAFE24-9001"] == "exchange"
+        assert categories["CAFE24-9002"] == "delivery"
+        assert all(claim["automation"]["auto_triaged"] is True for claim in claims_payload)
+
+        dashboard_response = client.get("/api/dashboard/summary")
+        assert dashboard_response.status_code == 200
+        dashboard_payload = dashboard_response.json()
+        assert dashboard_payload["cafe24"]["last_sync_result"] == "live_completed"
 
 
 def test_cafe24_live_webhook_verifies_signature_and_dedupes(monkeypatch) -> None:

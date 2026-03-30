@@ -218,13 +218,13 @@ export function DashboardPage() {
       .slice(0, 4);
   }, [claims]);
 
-  async function handleRunMockSync() {
+  async function handleSyncAction(endpoint: string, fallbackMessage: string, successMessage: string) {
     setWorking(true);
     setError(null);
     setNotice(null);
 
     try {
-      await apiFetch<Cafe24IntegrationStatus>("/api/integrations/cafe24/mock-sync", { method: "POST" });
+      await apiFetch<Cafe24IntegrationStatus>(endpoint, { method: "POST" });
       await loadDashboard();
       setNotice("Cafe24 Mock Sync를 다시 실행했습니다.");
     } catch (syncError) {
@@ -232,6 +232,22 @@ export function DashboardPage() {
     } finally {
       setWorking(false);
     }
+  }
+
+  async function handleRunMockSync() {
+    await handleSyncAction(
+      "/api/integrations/cafe24/mock-sync",
+      "Cafe24 Mock Sync 실행에 실패했습니다.",
+      "Cafe24 Mock Sync를 다시 실행했습니다."
+    );
+  }
+
+  async function handleRunLiveSync() {
+    await handleSyncAction(
+      "/api/integrations/cafe24/live-sync",
+      "Cafe24 Live Sync 실행에 실패했습니다.",
+      "Cafe24 Live Sync를 실행했습니다."
+    );
   }
 
   async function handleQuickSendDraft(claimId: number) {
@@ -389,6 +405,10 @@ export function DashboardPage() {
                 <div className="actions">
                   {summary.cafe24.next_action_type === "mock_sync" ? (
                     <button className="button secondary" type="button" onClick={handleRunMockSync} disabled={working}>
+                      {summary.cafe24.next_action_label}
+                    </button>
+                  ) : summary.cafe24.next_action_type === "live_sync" ? (
+                    <button className="button secondary" type="button" onClick={handleRunLiveSync} disabled={working}>
                       {summary.cafe24.next_action_label}
                     </button>
                   ) : summary.cafe24.next_action_href ? (

@@ -14,6 +14,7 @@ from app.integrations.cafe24.live_service import (
     ingest_live_webhook,
     refresh_connection_token,
     resolve_webhook_merchant,
+    run_live_sync,
 )
 from app.integrations.cafe24.oauth_client import Cafe24OAuthClient
 from app.integrations.cafe24.sync_service import Cafe24SyncService
@@ -236,6 +237,26 @@ def cafe24_mock_sync(merchant_id: int | None = None, db: Session = Depends(get_d
     return Cafe24IntegrationStatus.model_validate(service.run_mock_sync(merchant, claims, settings))
 
 
+@router.post("/integrations/cafe24/live-sync", response_model=Cafe24IntegrationStatus)
+def cafe24_live_sync(
+    merchant_id: int | None = None,
+    limit: int = Query(default=20, ge=1, le=50),
+    db: Session = Depends(get_db),
+) -> Cafe24IntegrationStatus:
+    settings = get_settings()
+    merchant = get_default_merchant(db, merchant_id)
+    service = build_cafe24_service(settings)
+    run_live_sync(db, merchant, service.oauth_client, settings, limit=limit)
+    claims = list_claims(db, merchant_id=merchant.id)
+    live_status = build_live_status(db, merchant, claims, settings, service.oauth_client)
+    if live_status is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Cafe24 live sync completed but no live status is available.",
+        )
+    return Cafe24IntegrationStatus.model_validate(live_status)
+
+
 @router.post("/integrations/cafe24/clear-activity", response_model=Cafe24IntegrationStatus)
 def cafe24_clear_activity(merchant_id: int | None = None, db: Session = Depends(get_db)) -> Cafe24IntegrationStatus:
     settings = get_settings()
@@ -421,7 +442,9 @@ def dashboard_summary(
     merchant = get_default_merchant(db, merchant_id)
     claims = list_claims(db, merchant_id=merchant.id)
     service = build_cafe24_service(settings)
-    cafe24_status = service.get_status(merchant, claims, settings)
+    cafe24_status = build_live_status(db, merchant, claims, settings, service.oauth_client)
+    if cafe24_status is None:
+        cafe24_status = service.get_status(merchant, claims, settings)
     latest_event = cafe24_status["recent_events"][0] if cafe24_status["recent_events"] else None
 
     return DashboardSummary(

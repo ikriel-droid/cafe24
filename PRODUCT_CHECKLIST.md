@@ -19,7 +19,7 @@
 
 - [x] Cafe24 실제 OAuth authorize / callback / token exchange 구현
 - [x] Cafe24 access token 저장 및 갱신 처리
-- [ ] Cafe24 주문 / 배송 / 클레임 실제 sync 구현
+- [x] Cafe24 주문 / 배송 / 클레임 실제 sync 구현
 - [x] Cafe24 webhook 실제 엔드포인트 연결
 - [x] webhook 서명 검증 및 위변조 방지
 - [x] webhook 중복 수신 방지 키 처리
