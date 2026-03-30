@@ -166,6 +166,14 @@ After any run that includes `report`, inspect:
 - `run-artifacts/latest-completion-report.md`
 - `run-artifacts/latest-completion-report.json`
 
+## Remaining Product Checklist
+
+The tracked remaining work lives in:
+
+- `PRODUCT_CHECKLIST.md`
+
+This file is the source of truth for post-MVP work. As items are completed, they should be updated from `[ ]` to `[x]`.
+
 ## Useful Commands
 
 Backend tests:

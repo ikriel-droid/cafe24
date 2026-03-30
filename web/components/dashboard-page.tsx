@@ -56,6 +56,7 @@ export function DashboardPage() {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [selectedAutomationSource, setSelectedAutomationSource] = useState<string>("");
+  const [isSourceFilterInitialized, setIsSourceFilterInitialized] = useState(false);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [automationWorkingId, setAutomationWorkingId] = useState<number | null>(null);
@@ -88,6 +89,29 @@ export function DashboardPage() {
   useEffect(() => {
     void loadDashboard();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setSelectedAutomationSource(params.get("source_focus") ?? "");
+    setIsSourceFilterInitialized(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isSourceFilterInitialized) {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    if (selectedAutomationSource) {
+      params.set("source_focus", selectedAutomationSource);
+    } else {
+      params.delete("source_focus");
+    }
+
+    const query = params.toString();
+    const nextUrl = query ? `/dashboard?${query}` : "/dashboard";
+    window.history.replaceState(null, "", nextUrl);
+  }, [selectedAutomationSource, isSourceFilterInitialized]);
 
   useEffect(() => {
     if (!notice) {
