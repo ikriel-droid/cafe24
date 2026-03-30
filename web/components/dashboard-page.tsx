@@ -55,6 +55,7 @@ export function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [claims, setClaims] = useState<Claim[]>([]);
   const [policy, setPolicy] = useState<Policy | null>(null);
+  const [selectedAutomationSource, setSelectedAutomationSource] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [automationWorkingId, setAutomationWorkingId] = useState<number | null>(null);
@@ -118,22 +119,27 @@ export function DashboardPage() {
           (claim.status === "open" || claim.status === "in_review") &&
           claim.automation.auto_triaged &&
           claim.automation.reply_ready &&
-          !claim.automation.reply_sent,
+          !claim.automation.reply_sent &&
+          (!selectedAutomationSource || claim.automation.source_event === selectedAutomationSource),
       )
       .sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime())
       .slice(0, 4);
-  }, [claims]);
+  }, [claims, selectedAutomationSource]);
 
   const followUpQueue = useMemo(() => {
     return claims
-      .filter((claim) => claim.automation.follow_up_needed)
+      .filter(
+        (claim) =>
+          claim.automation.follow_up_needed &&
+          (!selectedAutomationSource || claim.automation.source_event === selectedAutomationSource),
+      )
       .sort((left, right) => {
         const rightTime = right.automation.reply_sent_at ? new Date(right.automation.reply_sent_at).getTime() : 0;
         const leftTime = left.automation.reply_sent_at ? new Date(left.automation.reply_sent_at).getTime() : 0;
         return rightTime - leftTime;
       })
       .slice(0, 4);
-  }, [claims]);
+  }, [claims, selectedAutomationSource]);
 
   const automationSourceBreakdown = useMemo(() => {
     const sourceMap = new Map<
@@ -405,8 +411,34 @@ export function DashboardPage() {
             <div className="card stack">
               <div>
                 <h3>자동화 큐</h3>
-                <p>자동 분류와 초안이 준비된 건을 여기서 바로 발송까지 이어갈 수 있습니다.</p>
+                <p>
+                  자동 분류와 초안이 준비된 건을 여기서 바로 발송까지 이어갈 수 있습니다.
+                  {selectedAutomationSource
+                    ? ` 현재 포커스: ${formatAutomationSourceEvent(selectedAutomationSource)}`
+                    : ""}
+                </p>
               </div>
+              {automationSourceBreakdown.length > 0 ? (
+                <div className="toggle-strip">
+                  <button
+                    type="button"
+                    className={`toggle-chip ${selectedAutomationSource === "" ? "active" : ""}`}
+                    onClick={() => setSelectedAutomationSource("")}
+                  >
+                    전체 출처
+                  </button>
+                  {automationSourceBreakdown.map((source) => (
+                    <button
+                      key={source.sourceEvent}
+                      type="button"
+                      className={`toggle-chip ${selectedAutomationSource === source.sourceEvent ? "active" : ""}`}
+                      onClick={() => setSelectedAutomationSource(source.sourceEvent)}
+                    >
+                      {source.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {automationQueue.length > 0 ? (
                 <div className="timeline">
                   {automationQueue.map((claim) => (
@@ -458,7 +490,11 @@ export function DashboardPage() {
                   ))}
                 </div>
               ) : (
-                <div className="empty-state inline-state">지금 자동화 큐에 남아 있는 클레임이 없습니다.</div>
+                <div className="empty-state inline-state">
+                  {selectedAutomationSource
+                    ? "선택한 자동화 출처에 해당하는 큐가 없습니다."
+                    : "지금 자동화 큐에 남아 있는 클레임이 없습니다."}
+                </div>
               )}
             </div>
           </section>
@@ -467,7 +503,12 @@ export function DashboardPage() {
             <div className="card stack">
               <div>
                 <h3>발송 후 후속 확인</h3>
-                <p>답변은 보냈지만 아직 완료 처리되지 않아 다시 확인할 건입니다.</p>
+                <p>
+                  답변은 보냈지만 아직 완료 처리되지 않아 다시 확인할 건입니다.
+                  {selectedAutomationSource
+                    ? ` 현재 포커스: ${formatAutomationSourceEvent(selectedAutomationSource)}`
+                    : ""}
+                </p>
               </div>
               {followUpQueue.length > 0 ? (
                 <div className="timeline">
@@ -508,7 +549,11 @@ export function DashboardPage() {
                   ))}
                 </div>
               ) : (
-                <div className="empty-state inline-state">지금 후속 확인이 필요한 클레임이 없습니다.</div>
+                <div className="empty-state inline-state">
+                  {selectedAutomationSource
+                    ? "선택한 자동화 출처에 해당하는 후속 확인 건이 없습니다."
+                    : "지금 후속 확인이 필요한 클레임이 없습니다."}
+                </div>
               )}
             </div>
 
