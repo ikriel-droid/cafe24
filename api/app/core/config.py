@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     default_merchant_id: int = 1
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
+    session_secret_key: str = "claimmate-local-session-secret"
+    session_cookie_name: str = "claimmate_session"
+    session_max_age_seconds: int = 60 * 60 * 12
     cafe24_client_id: str | None = None
     cafe24_client_secret: str | None = None
     cafe24_redirect_uri: str | None = None

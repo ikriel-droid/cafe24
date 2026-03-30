@@ -51,6 +51,22 @@ textarea {
   grid-template-columns: 260px 1fr;
 }
 
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+}
+
+.auth-card {
+  width: min(520px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  box-shadow: var(--shadow);
+  padding: 28px;
+}
+
 .sidebar {
   padding: 28px 22px;
   border-right: 1px solid var(--border);
@@ -87,6 +103,44 @@ textarea {
   line-height: 1.6;
 }
 
+.sidebar-session {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 22px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: #fff8ef;
+}
+
+.sidebar-session p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.sidebar-session-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sidebar-role {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sidebar-helper {
+  word-break: break-all;
+}
+
 .nav-links {
   display: grid;
   gap: 10px;
@@ -105,6 +159,19 @@ textarea {
   border-color: var(--border);
   box-shadow: var(--shadow);
   color: var(--text);
+}
+
+.sidebar-actions {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.sidebar-footnote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .content {
@@ -230,6 +297,15 @@ textarea {
 .toolbar .field.compact-field {
   min-width: 140px;
   flex: 0.8;
+}
+
+.input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
 }
 
 .table-wrap {
@@ -499,6 +575,25 @@ tbody tr:hover {
   padding: 32px;
   text-align: center;
   color: var(--muted);
+}
+
+.page-centered {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.error-banner {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid #e7c5c5;
+  background: #fff1f1;
+  color: var(--danger);
+}
+
+.global-banner {
+  width: min(520px, calc(100% - 40px));
+  margin: 24px auto 0;
 }
 
 .success-state {

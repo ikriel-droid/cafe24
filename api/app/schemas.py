@@ -120,6 +120,25 @@ class ClaimReplyRetry(BaseModel):
     mark_done: bool = Field(default=True)
 
 
+class AuthLoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class AuthSessionMerchant(BaseModel):
+    id: int
+    name: str
+    mall_name: str
+
+
+class AuthSessionResponse(BaseModel):
+    user_id: int
+    email: str
+    name: str
+    role: str
+    merchant: AuthSessionMerchant
+
+
 class PolicyRead(ORMModel):
     id: int
     merchant_id: int

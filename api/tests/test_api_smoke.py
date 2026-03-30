@@ -1,4 +1,4 @@
-import base64
+﻿import base64
 import hashlib
 import hmac
 from pathlib import Path
@@ -13,6 +13,104 @@ from app.db.session import reset_engine
 from app.integrations.cafe24.oauth_client import Cafe24OAuthTokens
 from app.integrations.cafe24.sync_service import Cafe24SyncService
 from app.models import Claim
+
+
+def login_as(client: TestClient, email: str = "manager@alpha-seller.local", password: str = "demo1234") -> dict:
+    response = client.post("/api/auth/login", json={"email": email, "password": password})
+    assert response.status_code == 200
+    return response.json()
+
+
+def test_auth_session_and_merchant_scope(monkeypatch) -> None:
+    temp_root = Path(".tmp") / "tests" / "auth-session"
+    if temp_root.exists():
+        shutil.rmtree(temp_root)
+    temp_root.mkdir(parents=True, exist_ok=True)
+
+    database_url = f"sqlite:///{temp_root.joinpath('claimmate-test.db').resolve().as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("SEED_DEMO_DATA", "true")
+    get_settings.cache_clear()
+    reset_engine()
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        session_payload = login_as(client)
+        assert session_payload["email"] == "manager@alpha-seller.local"
+        assert session_payload["role"] == "manager"
+        assert session_payload["merchant"]["mall_name"] == "alpha-seller"
+
+        me = client.get("/api/auth/session")
+        assert me.status_code == 200
+        assert me.json()["merchant"]["mall_name"] == "alpha-seller"
+
+        alpha_claims = client.get("/api/claims")
+        assert alpha_claims.status_code == 200
+        alpha_orders = {item["order_no"] for item in alpha_claims.json()}
+        assert "CM-240301-001" in alpha_orders
+        assert "BT-240301-001" not in alpha_orders
+
+
+def test_beta_merchant_isolated_from_alpha_data(monkeypatch) -> None:
+    temp_root = Path(".tmp") / "tests" / "merchant-isolation"
+    if temp_root.exists():
+        shutil.rmtree(temp_root)
+    temp_root.mkdir(parents=True, exist_ok=True)
+
+    database_url = f"sqlite:///{temp_root.joinpath('claimmate-test.db').resolve().as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("SEED_DEMO_DATA", "true")
+    get_settings.cache_clear()
+    reset_engine()
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        login_as(client, email="manager@beta-select.local")
+        beta_claims = client.get("/api/claims")
+        assert beta_claims.status_code == 200
+        beta_orders = {item["order_no"] for item in beta_claims.json()}
+        assert beta_orders == {"BT-240301-001", "BT-240301-002"}
+
+        hidden_alpha = client.get("/api/claims?q=CM-240301-001")
+        assert hidden_alpha.status_code == 200
+        assert hidden_alpha.json() == []
+
+
+def test_agent_role_cannot_update_policy_and_cannot_view_audit_logs(monkeypatch) -> None:
+    temp_root = Path(".tmp") / "tests" / "agent-role"
+    if temp_root.exists():
+        shutil.rmtree(temp_root)
+    temp_root.mkdir(parents=True, exist_ok=True)
+
+    database_url = f"sqlite:///{temp_root.joinpath('claimmate-test.db').resolve().as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("SEED_DEMO_DATA", "true")
+    get_settings.cache_clear()
+    reset_engine()
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        login_as(client, email="agent@alpha-seller.local")
+
+        detail = client.get("/api/claims/1")
+        assert detail.status_code == 200
+        assert detail.json()["audit_logs"] == []
+
+        update_policy = client.put(
+            "/api/policy",
+            json={
+                "exchange_window_days": 7,
+                "return_window_days": 7,
+                "return_shipping_fee": 3500,
+                "exchange_shipping_fee": 6000,
+                "refund_rule_text": "updated",
+                "exception_rule_text": "updated",
+            },
+        )
+        assert update_policy.status_code == 403
 
 
 def test_claim_reply_send_can_keep_claim_open(monkeypatch) -> None:
@@ -30,6 +128,7 @@ def test_claim_reply_send_can_keep_claim_open(monkeypatch) -> None:
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         client.post("/api/claims/2/draft-reply")
         response = client.post(
             "/api/claims/2/send-reply",
@@ -40,7 +139,7 @@ def test_claim_reply_send_can_keep_claim_open(monkeypatch) -> None:
         assert payload["status"] == "in_review"
         assert payload["automation"]["reply_sent"] is True
         assert payload["automation"]["follow_up_needed"] is True
-        assert payload["automation"]["reply_sent_by"] == "qa_operator"
+        assert payload["automation"]["reply_sent_by"] == "manager@alpha-seller.local"
         assert payload["automation"]["latest_delivery_status"] == "sent"
         assert payload["automation"]["latest_delivery_channel"] == "manual_handoff"
         assert payload["automation"]["delivery_attempt_count"] == 1
@@ -78,6 +177,7 @@ def test_reply_sent_filter_and_summary(monkeypatch) -> None:
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         client.post("/api/claims/1/draft-reply")
         response = client.post(
             "/api/claims/1/send-reply",
@@ -88,7 +188,7 @@ def test_reply_sent_filter_and_summary(monkeypatch) -> None:
         assert payload["automation"]["reply_sent"] is True
         assert payload["automation"]["follow_up_needed"] is False
         assert payload["automation"]["reply_sent_at"] is not None
-        assert payload["automation"]["reply_sent_by"] == "qa_operator"
+        assert payload["automation"]["reply_sent_by"] == "manager@alpha-seller.local"
         assert payload["automation"]["latest_delivery_status"] == "sent"
         assert payload["reply_deliveries"][0]["status"] == "sent"
 
@@ -121,13 +221,14 @@ def test_claim_reply_send_records_message_and_completes_claim(monkeypatch) -> No
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         draft_response = client.post("/api/claims/1/draft-reply")
         assert draft_response.status_code == 200
 
         send_response = client.post(
             "/api/claims/1/send-reply",
             json={
-                "reply_body": "안녕하세요. 교환 절차를 안내드리겠습니다.",
+                "reply_body": "?덈뀞?섏꽭?? 援먰솚 ?덉감瑜??덈궡?쒕━寃좎뒿?덈떎.",
                 "actor": "qa_operator",
                 "mark_done": True,
             },
@@ -136,9 +237,9 @@ def test_claim_reply_send_records_message_and_completes_claim(monkeypatch) -> No
         payload = send_response.json()
         assert payload["status"] == "done"
         assert payload["messages"][-1]["role"] == "merchant"
-        assert payload["messages"][-1]["body"] == "안녕하세요. 교환 절차를 안내드리겠습니다."
+        assert payload["messages"][-1]["body"] == "?덈뀞?섏꽭?? 援먰솚 ?덉감瑜??덈궡?쒕━寃좎뒿?덈떎."
         assert payload["audit_logs"][0]["event_type"] == "reply_sent"
-        assert payload["audit_logs"][0]["actor"] == "qa_operator"
+        assert payload["audit_logs"][0]["actor"] == "manager@alpha-seller.local"
         assert payload["audit_logs"][0]["payload_json"]["mark_done"] is True
         assert payload["audit_logs"][0]["payload_json"]["source"] == "manual_edit"
         assert payload["reply_deliveries"][0]["status"] == "sent"
@@ -183,6 +284,7 @@ def test_reply_delivery_failure_can_be_retried(monkeypatch) -> None:
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         client.post("/api/claims/1/draft-reply")
 
         failed = client.post(
@@ -229,6 +331,7 @@ def test_claims_endpoint_bootstraps_database(monkeypatch) -> None:
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         response = client.get("/api/claims")
         assert response.status_code == 200
         payload = response.json()
@@ -251,6 +354,7 @@ def test_claims_endpoint_supports_search(monkeypatch) -> None:
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         response = client.get("/api/claims?q=오배송")
         assert response.status_code == 200
         payload = response.json()
@@ -274,16 +378,17 @@ def test_claim_note_is_recorded_in_audit_log(monkeypatch) -> None:
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         response = client.post(
             "/api/claims/1/notes",
-            json={"note": "고객이 사진 사전 전달 예정", "actor": "qa_operator"},
+            json={"note": "怨좉컼???ъ쭊 ?ъ쟾 ?꾨떖 ?덉젙", "actor": "qa_operator"},
         )
         assert response.status_code == 200
         payload = response.json()
         latest_log = payload["audit_logs"][0]
         assert latest_log["event_type"] == "internal_note_added"
-        assert latest_log["actor"] == "qa_operator"
-        assert latest_log["payload_json"]["note"] == "고객이 사진 사전 전달 예정"
+        assert latest_log["actor"] == "manager@alpha-seller.local"
+        assert latest_log["payload_json"]["note"] == "怨좉컼???ъ쭊 ?ъ쟾 ?꾨떖 ?덉젙"
 
 
 def test_cafe24_mock_sync_status(monkeypatch) -> None:
@@ -302,6 +407,7 @@ def test_cafe24_mock_sync_status(monkeypatch) -> None:
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         initial = client.get("/api/integrations/cafe24")
         assert initial.status_code == 200
         assert initial.json()["connection_mode"] == "offline_mock"
@@ -340,6 +446,7 @@ def test_cafe24_mock_webhook_increases_pending_count(monkeypatch) -> None:
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         base_status = client.get("/api/integrations/cafe24")
         assert base_status.status_code == 200
         base_pending = base_status.json()["pending_webhooks"]
@@ -404,6 +511,7 @@ def test_cafe24_callback_redirects_to_console(monkeypatch) -> None:
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         response = client.get(
             "/api/integrations/cafe24/callback?code=demo-code&state=claimmate-local-1",
             follow_redirects=False,
@@ -467,6 +575,7 @@ def test_cafe24_live_oauth_connects_and_refreshes_token(monkeypatch) -> None:
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         callback = client.get(
             "/api/integrations/cafe24/callback?code=live-code&state=claimmate-live-1",
             follow_redirects=False,
@@ -527,14 +636,14 @@ def test_cafe24_live_sync_imports_orders_shipments_and_claims(monkeypatch) -> No
                 "order_id": "9001",
                 "order_no": "CAFE24-9001",
                 "buyer": {"name": "김민지"},
-                "items": [{"product_name": "에어핏 셔츠"}],
+                "items": [{"product_name": "레이어드 카디건"}],
                 "order_status": "exchange requested",
             },
             {
                 "order_id": "9002",
                 "order_no": "CAFE24-9002",
-                "buyer_name": "박지훈",
-                "product_name": "코튼 팬츠",
+                "buyer_name": "박서윤",
+                "product_name": "코튼 셔츠",
                 "order_status": "shipping",
             },
         ]
@@ -563,6 +672,7 @@ def test_cafe24_live_sync_imports_orders_shipments_and_claims(monkeypatch) -> No
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         callback = client.get(
             "/api/integrations/cafe24/callback?code=live-code&state=claimmate-live-1",
             follow_redirects=False,
@@ -626,6 +736,7 @@ def test_cafe24_live_webhook_verifies_signature_and_dedupes(monkeypatch) -> None
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         client.get("/api/integrations/cafe24/callback?code=live-code&state=claimmate-live-1", follow_redirects=False)
 
         body = b'{"mall_id":"alpha-seller","event_type":"claim.exchange.requested","order_no":"CM-240301-001"}'
@@ -704,6 +815,7 @@ def test_cafe24_live_webhook_failures_can_be_retried(monkeypatch) -> None:
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         client.get("/api/integrations/cafe24/callback?code=live-code&state=claimmate-live-1", follow_redirects=False)
 
         body = b'{"mall_id":"alpha-seller","event_type":"claim.exchange.requested","order_no":"CM-240301-001"}'
@@ -754,6 +866,7 @@ def test_cafe24_activity_can_be_cleared(monkeypatch) -> None:
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         synced = client.post("/api/integrations/cafe24/mock-sync")
         assert synced.status_code == 200
         assert len(synced.json()["recent_events"]) >= 1
@@ -781,6 +894,7 @@ def test_mock_cafe24_status_persists_after_engine_reset(monkeypatch) -> None:
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         synced = client.post("/api/integrations/cafe24/mock-sync")
         assert synced.status_code == 200
         assert synced.json()["last_sync_result"] == "mock_completed"
@@ -789,6 +903,7 @@ def test_mock_cafe24_status_persists_after_engine_reset(monkeypatch) -> None:
     reset_engine()
 
     with TestClient(app) as client:
+        login_as(client)
         status = client.get("/api/integrations/cafe24")
         assert status.status_code == 200
         payload = status.json()
@@ -812,6 +927,7 @@ def test_dashboard_summary_includes_cafe24_overview(monkeypatch) -> None:
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         initial = client.get("/api/dashboard/summary")
         assert initial.status_code == 200
         assert initial.json()["cafe24"]["health_status"] == "attention"
@@ -842,6 +958,7 @@ def test_claims_and_summary_support_automation_filters(monkeypatch) -> None:
     from app.main import app
 
     with TestClient(app) as client:
+        login_as(client)
         response = client.post(
             "/api/integrations/cafe24/mock-webhook",
             json={"event_type": "claim.exchange.requested", "order_no": "CM-240301-001"},
@@ -876,3 +993,4 @@ def test_claims_and_summary_support_automation_filters(monkeypatch) -> None:
         source_summary_payload = source_filtered_summary.json()
         assert source_summary_payload["total_claims"] == 1
         assert source_summary_payload["auto_triaged_claims"] == 1
+

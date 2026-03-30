@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ClaimCategory, ClaimStatus, ClaimUrgency } from "@/lib/types";
+import type { ClaimCategory, ClaimStatus, ClaimUrgency } from "@/lib/types";
 
 export const categoryLabels: Record<ClaimCategory, string> = {
   delivery: "배송",
@@ -49,7 +49,7 @@ export function formatAutomationSourceEvent(value: string | null | undefined) {
     "order.cancel.requested": "주문 취소 webhook",
     "delivery.delay.reported": "배송 지연 알림 webhook",
     "order.payment.awaiting": "결제 대기 webhook",
-    manual_classify: "수동 재분류",
+    manual_classify: "수동 분류",
     manual_draft_reply: "수동 답변 생성",
   };
 
@@ -78,12 +78,12 @@ export function formatReplyDeliveryStatus(value: string | null | undefined) {
     return null;
   }
 
-  const statusLabels: Record<string, string> = {
+  const deliveryStatusLabels: Record<string, string> = {
     sent: "발송 성공",
     failed: "발송 실패",
   };
 
-  return statusLabels[value] ?? value.replace(/_/g, " ");
+  return deliveryStatusLabels[value] ?? value.replace(/_/g, " ");
 }
 
 export function Badge({

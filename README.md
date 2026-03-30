@@ -39,6 +39,7 @@ Copy-Item api/.env.example api/.env
 ```
 
 By default this example keeps `DATABASE_URL` empty, so the backend falls back to local SQLite. If you want to use PostgreSQL from Docker Compose, set `DATABASE_URL=postgresql+psycopg://claimmate:claimmate@127.0.0.1:5432/claimmate` in `api/.env`.
+Auth and session vars are also included there: `SESSION_SECRET_KEY`, `SESSION_COOKIE_NAME`, `SESSION_MAX_AGE_SECONDS`.
 Optional Cafe24 placeholder vars are also included there: `CAFE24_CLIENT_ID`, `CAFE24_CLIENT_SECRET`, and `CAFE24_REDIRECT_URI`.
 
 3. Copy frontend env:
@@ -103,6 +104,21 @@ Open [http://127.0.0.1:3000/dashboard](http://127.0.0.1:3000/dashboard).
 The root route redirects to `/dashboard`, and `/inbox` remains the working queue view.
 
 The Cafe24 console is available at `/integrations/cafe24` and supports offline Mock Sync, simulated OAuth callback testing, live OAuth/token storage, live webhook verification, and manual Live Sync execution. Mock integration activity is now stored in the database instead of in-memory state, so status survives engine resets and app restarts.
+
+## Demo Operator Accounts
+
+The local seed now creates operator accounts with merchant isolation and role-based access:
+
+- `manager@alpha-seller.local` / `demo1234`
+- `agent@alpha-seller.local` / `demo1234`
+- `viewer@alpha-seller.local` / `demo1234`
+- `manager@beta-select.local` / `demo1234`
+
+Role behavior in the local MVP:
+
+- `manager`: full access including policy and Cafe24 integration settings
+- `agent`: claim processing, classification, draft generation, and reply delivery
+- `viewer`: read-only access to dashboard, inbox, and claim detail without audit log visibility
 
 ## Reply Delivery Modes
 
@@ -220,10 +236,10 @@ docker compose logs -f web
 
 ## Known Limitations
 
-- Authentication and tenant isolation are intentionally omitted.
+- Authentication and tenant isolation are implemented for local operator accounts, but there is no production-grade identity provider, password reset flow, or MFA yet.
 - Redis is provisioned but not actively used yet beyond the integration boundary placeholder.
 - Cafe24 OAuth, live webhook verification, manual webhook retry, and manual Live Sync now perform real network calls when Cafe24 credentials are configured, but background jobs and full production hardening are still pending.
 - OpenAI integration is a stub and always falls back to the deterministic mock logic.
 - The UI focuses on clarity and local runnability, not production-grade design coverage.
 - Docker Compose has not been executed in this workspace because Docker is not installed here, so the container definitions were added conservatively and kept close to the already verified local commands.
-- `complete-claimmate.ps1` automates everything that is local and deterministic, but Cafe24 partner approval, real endpoint mapping, auth, tenant isolation, and production deployment still require manual implementation work outside the current MVP.
+- `complete-claimmate.ps1` automates everything that is local and deterministic, but Cafe24 partner approval, real endpoint mapping, background jobs, production auth hardening, and deployment still require manual implementation work outside the current MVP.

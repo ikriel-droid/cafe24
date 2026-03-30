@@ -14,6 +14,8 @@ from app.models import (
     Claim,
     ClaimCategory,
     ClaimMessage,
+    OperatorRole,
+    OperatorUser,
     ClaimStatus,
     ClaimUrgency,
     Merchant,
@@ -55,7 +57,20 @@ MOCK_WEBHOOK_RULES: dict[str, dict[str, object]] = {
 }
 
 
-def get_default_merchant(session: Session, merchant_id: int | None = None) -> Merchant:
+def get_default_merchant(
+    session: Session,
+    merchant_id: int | None = None,
+    operator: OperatorUser | None = None,
+) -> Merchant:
+    if operator is not None:
+        target_merchant_id = operator.merchant_id
+        if merchant_id is not None and merchant_id != operator.merchant_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Merchant scope is restricted.")
+        merchant = session.get(Merchant, target_merchant_id)
+        if merchant is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Merchant not found.")
+        return merchant
+
     settings = get_settings()
     target_merchant_id = merchant_id if merchant_id is not None else settings.default_merchant_id
     merchant = session.get(Merchant, target_merchant_id)
@@ -66,16 +81,21 @@ def get_default_merchant(session: Session, merchant_id: int | None = None) -> Me
     return merchant
 
 
-def get_policy(session: Session, merchant_id: int | None = None) -> Policy:
-    merchant = get_default_merchant(session, merchant_id)
+def get_policy(session: Session, merchant_id: int | None = None, operator: OperatorUser | None = None) -> Policy:
+    merchant = get_default_merchant(session, merchant_id, operator)
     policy = session.scalar(select(Policy).where(Policy.merchant_id == merchant.id))
     if policy is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Policy not found.")
     return policy
 
 
-def update_policy(session: Session, payload: PolicyUpdate, merchant_id: int | None = None) -> Policy:
-    policy = get_policy(session, merchant_id)
+def update_policy(
+    session: Session,
+    payload: PolicyUpdate,
+    merchant_id: int | None = None,
+    operator: OperatorUser | None = None,
+) -> Policy:
+    policy = get_policy(session, merchant_id, operator)
     for field, value in payload.model_dump().items():
         setattr(policy, field, value)
     session.add(policy)
@@ -87,6 +107,7 @@ def update_policy(session: Session, payload: PolicyUpdate, merchant_id: int | No
 def list_claims(
     session: Session,
     merchant_id: int | None = None,
+    operator: OperatorUser | None = None,
     category: ClaimCategory | None = None,
     status_value: ClaimStatus | None = None,
     search_text: str | None = None,
@@ -96,7 +117,7 @@ def list_claims(
     reply_sent: bool | None = None,
     follow_up_needed: bool | None = None,
 ) -> list[Claim]:
-    merchant = get_default_merchant(session, merchant_id)
+    merchant = get_default_merchant(session, merchant_id, operator)
     query = (
         select(Claim)
         .where(Claim.merchant_id == merchant.id)
@@ -151,7 +172,7 @@ def list_claims(
     return filtered_claims
 
 
-def get_claim(session: Session, claim_id: int) -> Claim:
+def get_claim(session: Session, claim_id: int, operator: OperatorUser | None = None) -> Claim:
     query = (
         select(Claim)
         .where(Claim.id == claim_id)
@@ -164,6 +185,8 @@ def get_claim(session: Session, claim_id: int) -> Claim:
     )
     claim = session.scalar(query)
     if claim is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Claim not found.")
+    if operator is not None and claim.merchant_id != operator.merchant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Claim not found.")
     return claim
 
@@ -296,8 +319,14 @@ def record_reply_delivery(
     return delivery
 
 
-def update_claim_status(session: Session, claim_id: int, status_value: ClaimStatus, actor: str) -> Claim:
-    claim = get_claim(session, claim_id)
+def update_claim_status(
+    session: Session,
+    claim_id: int,
+    status_value: ClaimStatus,
+    actor: str,
+    operator: OperatorUser | None = None,
+) -> Claim:
+    claim = get_claim(session, claim_id, operator)
     claim.status = status_value
     record_audit_log(
         session,
@@ -309,11 +338,11 @@ def update_claim_status(session: Session, claim_id: int, status_value: ClaimStat
     session.add(claim)
     session.commit()
     session.expire_all()
-    return get_claim(session, claim_id)
+    return get_claim(session, claim_id, operator)
 
 
-def add_claim_note(session: Session, claim_id: int, payload: ClaimNoteCreate) -> Claim:
-    claim = get_claim(session, claim_id)
+def add_claim_note(session: Session, claim_id: int, payload: ClaimNoteCreate, operator: OperatorUser | None = None) -> Claim:
+    claim = get_claim(session, claim_id, operator)
     note_text = payload.note.strip()
     if not note_text:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Note cannot be empty.")
@@ -327,11 +356,11 @@ def add_claim_note(session: Session, claim_id: int, payload: ClaimNoteCreate) ->
     )
     session.commit()
     session.expire_all()
-    return get_claim(session, claim_id)
+    return get_claim(session, claim_id, operator)
 
 
-def send_claim_reply(session: Session, claim_id: int, payload: ClaimReplySend) -> Claim:
-    claim = get_claim(session, claim_id)
+def send_claim_reply(session: Session, claim_id: int, payload: ClaimReplySend, operator: OperatorUser | None = None) -> Claim:
+    claim = get_claim(session, claim_id, operator)
     latest_reply = next(
         (action for action in claim.suggested_actions if action.action_type == "draft_reply"),
         None,
@@ -433,11 +462,16 @@ def send_claim_reply(session: Session, claim_id: int, payload: ClaimReplySend) -
     )
     session.commit()
     session.expire_all()
-    return get_claim(session, claim_id)
+    return get_claim(session, claim_id, operator)
 
 
-def retry_failed_claim_reply(session: Session, claim_id: int, payload: ClaimReplyRetry) -> Claim:
-    claim = get_claim(session, claim_id)
+def retry_failed_claim_reply(
+    session: Session,
+    claim_id: int,
+    payload: ClaimReplyRetry,
+    operator: OperatorUser | None = None,
+) -> Claim:
+    claim = get_claim(session, claim_id, operator)
     failed_delivery = next(
         (delivery for delivery in claim.reply_deliveries if delivery.status == ReplyDeliveryStatus.FAILED),
         None,
@@ -456,11 +490,12 @@ def retry_failed_claim_reply(session: Session, claim_id: int, payload: ClaimRepl
             actor=payload.actor,
             mark_done=payload.mark_done,
         ),
+        operator,
     )
 
 
-def classify_claim(session: Session, claim_id: int) -> ClassificationResult:
-    claim = get_claim(session, claim_id)
+def classify_claim(session: Session, claim_id: int, operator: OperatorUser | None = None) -> ClassificationResult:
+    claim = get_claim(session, claim_id, operator)
     provider = get_ai_provider()
     result = provider.classify_claim(claim, claim.messages)
 
@@ -493,9 +528,9 @@ def classify_claim(session: Session, claim_id: int) -> ClassificationResult:
     return result
 
 
-def generate_draft_reply(session: Session, claim_id: int) -> DraftReplyResult:
-    claim = get_claim(session, claim_id)
-    policy = get_policy(session, claim.merchant_id)
+def generate_draft_reply(session: Session, claim_id: int, operator: OperatorUser | None = None) -> DraftReplyResult:
+    claim = get_claim(session, claim_id, operator)
+    policy = get_policy(session, claim.merchant_id, operator)
     provider = get_ai_provider()
     result = provider.draft_reply(claim, policy, claim.messages)
 
@@ -670,6 +705,7 @@ def apply_live_webhook_to_claim(
 def get_dashboard_summary(
     session: Session,
     merchant_id: int | None = None,
+    operator: OperatorUser | None = None,
     category: ClaimCategory | None = None,
     status_value: ClaimStatus | None = None,
     search_text: str | None = None,
@@ -682,6 +718,7 @@ def get_dashboard_summary(
     claims = list_claims(
         session,
         merchant_id=merchant_id,
+        operator=operator,
         category=category,
         status_value=status_value,
         search_text=search_text,

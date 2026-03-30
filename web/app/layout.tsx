@@ -1,7 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Navigation } from "@/components/navigation";
+import { AppShell } from "@/components/app-shell";
 
 export const metadata: Metadata = {
   title: "ClaimMate AI",
@@ -12,10 +12,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ko">
       <body>
-        <div className="app-shell">
-          <Navigation />
-          <main className="content">{children}</main>
-        </div>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

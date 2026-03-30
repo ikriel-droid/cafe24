@@ -37,12 +37,12 @@
 
 ## 3. Auth And Tenant Isolation
 
-- [ ] 운영자 로그인 구현
-- [ ] merchant 단위 데이터 격리
-- [ ] 권한 / 역할 구분
-- [ ] API 인증 / 세션 처리
-- [ ] merchant별 정책 / 연동 설정 분리
-- [ ] 감사 로그 열람 권한 제한
+- [x] 운영자 로그인 구현
+- [x] merchant 단위 데이터 격리
+- [x] 권한 / 역할 구분
+- [x] API 세션 / 인증 처리
+- [x] merchant별 정책 / 연동 설정 분리
+- [x] 감사 로그 열람 권한 제한
 
 ## 4. Background Jobs And Reliability
 
@@ -50,7 +50,7 @@
 - [ ] sync 비동기 작업 분리
 - [ ] webhook 처리 비동기화
 - [ ] job retry / dead-letter 정책 추가
-- [ ] 장시간 작업 상태 추적
+- [ ] 실시간 작업 상태 추적
 - [ ] 운영자 수동 버튼과 job 상태 연결
 
 ## 5. Database And Data Lifecycle
@@ -59,7 +59,7 @@
 - [ ] 운영용 PostgreSQL 스키마 정리
 - [ ] seed data와 운영 데이터 분리
 - [ ] soft delete / 보존 정책 정의
-- [ ] 백업 / 복구 절차 문서화
+- [ ] 백업 / 복구 점검 문서화
 - [ ] 샘플 데이터 초기화 명령 분리
 
 ## 6. AI Productionization
@@ -103,7 +103,7 @@
 
 - [ ] merchant onboarding 플로우
 - [ ] 설치 가이드 / 운영 가이드 문서화
-- [ ] 요금 기준 정의
+- [ ] 과금 기준 정의
 - [ ] 사용량 측정 방식 설계
 - [ ] 개인정보 처리 / 보관 정책 검토
 - [ ] 베타 고객 검증 시나리오 확정

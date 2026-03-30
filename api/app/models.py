@@ -37,6 +37,12 @@ class ClaimUrgency(str, Enum):
     HIGH = "high"
 
 
+class OperatorRole(str, Enum):
+    MANAGER = "manager"
+    AGENT = "agent"
+    VIEWER = "viewer"
+
+
 class ReplyDeliveryChannel(str, Enum):
     MANUAL_HANDOFF = "manual_handoff"
     WEBHOOK = "webhook"
@@ -57,6 +63,7 @@ class Merchant(Base):
 
     policy: Mapped["Policy | None"] = relationship(back_populates="merchant", uselist=False)
     claims: Mapped[list["Claim"]] = relationship(back_populates="merchant")
+    operators: Mapped[list["OperatorUser"]] = relationship(back_populates="merchant")
     cafe24_connection: Mapped["Cafe24Connection | None"] = relationship(back_populates="merchant", uselist=False)
     cafe24_webhook_deliveries: Mapped[list["Cafe24WebhookDelivery"]] = relationship(back_populates="merchant")
     cafe24_integration_events: Mapped[list["Cafe24IntegrationEvent"]] = relationship(back_populates="merchant")
@@ -81,6 +88,30 @@ class Policy(Base):
     )
 
     merchant: Mapped["Merchant"] = relationship(back_populates="policy")
+
+
+class OperatorUser(Base):
+    __tablename__ = "operator_users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    merchant_id: Mapped[int] = mapped_column(ForeignKey("merchants.id"), nullable=False, index=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    role: Mapped[OperatorRole] = mapped_column(
+        SqlEnum(OperatorRole, native_enum=False),
+        nullable=False,
+        default=OperatorRole.AGENT,
+    )
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    merchant: Mapped["Merchant"] = relationship(back_populates="operators")
 
 
 class Claim(Base):

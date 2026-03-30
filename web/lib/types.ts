@@ -10,6 +10,21 @@ export type ClaimCategory =
 
 export type ClaimStatus = "open" | "in_review" | "approved" | "rejected" | "done";
 export type ClaimUrgency = "low" | "medium" | "high";
+export type OperatorRole = "manager" | "agent" | "viewer";
+
+export interface AuthMerchant {
+  id: number;
+  name: string;
+  mall_name: string;
+}
+
+export interface AuthSession {
+  user_id: number;
+  email: string;
+  name: string;
+  role: OperatorRole;
+  merchant: AuthMerchant;
+}
 
 export interface ClaimMessage {
   id: number;
