@@ -12,6 +12,15 @@ const urgencyRank: Record<Claim["urgency"], number> = {
   low: 1,
 };
 
+function buildInboxSourceLink(sourceEvent: string) {
+  const params = new URLSearchParams({
+    sort: "priority",
+    auto_triaged: "true",
+    source_event: sourceEvent,
+  });
+  return `/inbox?${params.toString()}`;
+}
+
 function toneForUrgency(urgency: Claim["urgency"]) {
   if (urgency === "high") return "danger";
   if (urgency === "medium") return "accent";
@@ -122,6 +131,59 @@ export function DashboardPage() {
         const rightTime = right.automation.reply_sent_at ? new Date(right.automation.reply_sent_at).getTime() : 0;
         const leftTime = left.automation.reply_sent_at ? new Date(left.automation.reply_sent_at).getTime() : 0;
         return rightTime - leftTime;
+      })
+      .slice(0, 4);
+  }, [claims]);
+
+  const automationSourceBreakdown = useMemo(() => {
+    const sourceMap = new Map<
+      string,
+      {
+        sourceEvent: string;
+        label: string;
+        total: number;
+        replyReady: number;
+        followUp: number;
+        latestAt: string;
+      }
+    >();
+
+    for (const claim of claims) {
+      const sourceEvent = claim.automation.source_event;
+      if (!claim.automation.auto_triaged || !sourceEvent) {
+        continue;
+      }
+
+      const existing = sourceMap.get(sourceEvent);
+      const latestAt = claim.automation.auto_triaged_at ?? claim.updated_at;
+
+      if (!existing) {
+        sourceMap.set(sourceEvent, {
+          sourceEvent,
+          label: formatAutomationSourceEvent(sourceEvent) ?? sourceEvent,
+          total: 1,
+          replyReady: claim.automation.reply_ready ? 1 : 0,
+          followUp: claim.automation.follow_up_needed ? 1 : 0,
+          latestAt,
+        });
+        continue;
+      }
+
+      existing.total += 1;
+      existing.replyReady += claim.automation.reply_ready ? 1 : 0;
+      existing.followUp += claim.automation.follow_up_needed ? 1 : 0;
+      if (new Date(latestAt).getTime() > new Date(existing.latestAt).getTime()) {
+        existing.latestAt = latestAt;
+      }
+    }
+
+    return Array.from(sourceMap.values())
+      .sort((left, right) => {
+        if (right.total !== left.total) {
+          return right.total - left.total;
+        }
+
+        return new Date(right.latestAt).getTime() - new Date(left.latestAt).getTime();
       })
       .slice(0, 4);
   }, [claims]);
@@ -484,6 +546,31 @@ export function DashboardPage() {
                 <div className="empty-state inline-state">정책 정보를 아직 불러오지 못했습니다.</div>
               )}
             </div>
+          </section>
+
+          <section className="card stack">
+            <div>
+              <h3>자동화 출처</h3>
+              <p>어떤 webhook 계열에서 자동화 큐가 올라오는지 보고 바로 같은 출처의 인박스로 이동합니다.</p>
+            </div>
+            {automationSourceBreakdown.length > 0 ? (
+              <div className="resource-links">
+                {automationSourceBreakdown.map((source) => (
+                  <Link key={source.sourceEvent} href={buildInboxSourceLink(source.sourceEvent)} className="resource-link">
+                    <div className="actions">
+                      <strong>{source.label}</strong>
+                      <Badge tone="accent">{source.total}건</Badge>
+                    </div>
+                    <p>
+                      초안 준비 {source.replyReady} / 후속 확인 {source.followUp}
+                    </p>
+                    <span className="muted">최근 자동화 {formatDate(source.latestAt)}</span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state inline-state">아직 집계할 자동화 출처가 없습니다.</div>
+            )}
           </section>
 
           <section className="card stack">
