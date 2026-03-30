@@ -194,6 +194,7 @@ class Cafe24WebhookIngestResponse(BaseModel):
     dedupe_key: str
     event_type: str
     merchant_id: int
+    job_id: int | None = None
     claim_id: int | None = None
     retry_count: int = 0
     failed_reason: str | None = None
@@ -210,6 +211,30 @@ class Cafe24ActivityEvent(BaseModel):
     batch_id: str | None
     claim_id: int | None = None
     order_no: str | None = None
+
+
+class BackgroundJobRead(BaseModel):
+    id: int
+    queue_name: str
+    job_type: str
+    job_label: str
+    status: str
+    triggered_by: str
+    retry_count: int
+    max_retries: int
+    payload_json: dict[str, Any] | None = None
+    result_json: dict[str, Any] | None = None
+    result_preview: str | None = None
+    error_message: str | None = None
+    available_at: datetime | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class BackgroundJobRunResponse(BaseModel):
+    processed_job_ids: list[int]
 
 
 class Cafe24IntegrationStatus(BaseModel):
@@ -240,6 +265,11 @@ class Cafe24IntegrationStatus(BaseModel):
     pending_webhooks: int
     failed_webhooks: int = 0
     retryable_webhooks: int = 0
+    queued_jobs: int = 0
+    running_jobs: int = 0
+    scheduled_jobs: int = 0
+    dead_letter_jobs: int = 0
+    recent_jobs: list[BackgroundJobRead] = Field(default_factory=list)
     recent_events: list[Cafe24ActivityEvent]
     notes: list[str]
 
@@ -252,6 +282,10 @@ class DashboardCafe24Overview(BaseModel):
     last_synced_at: datetime | None
     pending_webhooks: int
     recent_activity_count: int
+    queued_jobs: int
+    running_jobs: int
+    scheduled_jobs: int
+    dead_letter_jobs: int
     latest_event_title: str | None
     latest_event_status: str | None
     latest_event_occurred_at: datetime | None

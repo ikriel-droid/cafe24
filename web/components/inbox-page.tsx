@@ -110,6 +110,10 @@ function buildCafe24Overview(status: Cafe24IntegrationStatus): DashboardCafe24Ov
     last_synced_at: status.last_synced_at,
     pending_webhooks: status.pending_webhooks,
     recent_activity_count: status.recent_events.length,
+    queued_jobs: status.queued_jobs,
+    running_jobs: status.running_jobs,
+    scheduled_jobs: status.scheduled_jobs,
+    dead_letter_jobs: status.dead_letter_jobs,
     latest_event_title: latestEvent?.title ?? null,
     latest_event_status: latestEvent?.status ?? null,
     latest_event_occurred_at: latestEvent?.occurred_at ?? null,
@@ -167,6 +171,9 @@ export function InboxPage() {
 
   const deferredSearchText = useDeferredValue(searchText);
   const sortedClaims = [...claims].sort((left, right) => compareClaims(left, right, sortBy));
+  const hasActiveJobs = Boolean(
+    syncStatus && (syncStatus.queued_jobs > 0 || syncStatus.running_jobs > 0 || syncStatus.scheduled_jobs > 0),
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -262,6 +269,33 @@ export function InboxPage() {
       cancelled = true;
     };
   }, [category, status, sourceEvent, deferredSearchText, autoTriagedOnly, replyReadyOnly, replySentOnly, followUpNeededOnly, isInitialized]);
+
+  useEffect(() => {
+    if (!hasActiveJobs || !isInitialized) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      const queryString = params.toString();
+      const claimsPath = queryString ? `/api/claims?${queryString}` : "/api/claims";
+      const summaryPath = queryString ? `/api/dashboard/summary?${queryString}` : "/api/dashboard/summary";
+
+      void Promise.all([
+        apiFetch<Claim[]>(claimsPath),
+        apiFetch<DashboardSummary>(summaryPath),
+        apiFetch<Cafe24IntegrationStatus>("/api/integrations/cafe24"),
+      ])
+        .then(([claimsResult, summaryResult, syncResult]) => {
+          setClaims(claimsResult);
+          setSyncStatus(syncResult);
+          setSummary({ ...summaryResult, cafe24: buildCafe24Overview(syncResult) });
+        })
+        .catch(() => undefined);
+    }, 1500);
+
+    return () => window.clearTimeout(timer);
+  }, [hasActiveJobs, isInitialized, syncStatus?.queued_jobs, syncStatus?.running_jobs, syncStatus?.scheduled_jobs]);
 
   useEffect(() => {
     if (!isInitialized) {

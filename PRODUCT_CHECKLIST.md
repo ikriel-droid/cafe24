@@ -46,12 +46,12 @@
 
 ## 4. Background Jobs And Reliability
 
-- [ ] Redis 기반 job queue 실제 사용
-- [ ] sync 비동기 작업 분리
-- [ ] webhook 처리 비동기화
-- [ ] job retry / dead-letter 정책 추가
-- [ ] 실시간 작업 상태 추적
-- [ ] 운영자 수동 버튼과 job 상태 연결
+- [x] Redis 기반 job queue 실제 사용
+- [x] sync 비동기 작업 분리
+- [x] webhook 처리 비동기화
+- [x] job retry / dead-letter 정책 추가
+- [x] 실시간 작업 상태 추적
+- [x] 운영자 수동 버튼과 job 상태 연결
 
 ## 5. Database And Data Lifecycle
 

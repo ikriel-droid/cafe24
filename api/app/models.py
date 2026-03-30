@@ -53,6 +53,14 @@ class ReplyDeliveryStatus(str, Enum):
     FAILED = "failed"
 
 
+class BackgroundJobStatus(str, Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    RETRY_SCHEDULED = "retry_scheduled"
+    SUCCEEDED = "succeeded"
+    DEAD_LETTER = "dead_letter"
+
+
 class Merchant(Base):
     __tablename__ = "merchants"
 
@@ -67,6 +75,7 @@ class Merchant(Base):
     cafe24_connection: Mapped["Cafe24Connection | None"] = relationship(back_populates="merchant", uselist=False)
     cafe24_webhook_deliveries: Mapped[list["Cafe24WebhookDelivery"]] = relationship(back_populates="merchant")
     cafe24_integration_events: Mapped[list["Cafe24IntegrationEvent"]] = relationship(back_populates="merchant")
+    background_jobs: Mapped[list["BackgroundJob"]] = relationship(back_populates="merchant")
 
 
 class Policy(Base):
@@ -319,3 +328,35 @@ class Cafe24IntegrationEvent(Base):
 
     merchant: Mapped["Merchant"] = relationship(back_populates="cafe24_integration_events")
     connection: Mapped["Cafe24Connection | None"] = relationship(back_populates="integration_events")
+
+
+class BackgroundJob(Base):
+    __tablename__ = "background_jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    merchant_id: Mapped[int] = mapped_column(ForeignKey("merchants.id"), nullable=False, index=True)
+    queue_name: Mapped[str] = mapped_column(String(64), nullable=False, default="default", index=True)
+    job_type: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    status: Mapped[BackgroundJobStatus] = mapped_column(
+        SqlEnum(BackgroundJobStatus, native_enum=False),
+        nullable=False,
+        default=BackgroundJobStatus.QUEUED,
+        index=True,
+    )
+    triggered_by: Mapped[str] = mapped_column(String(255), nullable=False, default="system")
+    payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    result_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    available_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    merchant: Mapped["Merchant"] = relationship(back_populates="background_jobs")

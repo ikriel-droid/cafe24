@@ -147,6 +147,10 @@ export interface DashboardCafe24Overview {
   last_synced_at: string | null;
   pending_webhooks: number;
   recent_activity_count: number;
+  queued_jobs: number;
+  running_jobs: number;
+  scheduled_jobs: number;
+  dead_letter_jobs: number;
   latest_event_title: string | null;
   latest_event_status: string | null;
   latest_event_occurred_at: string | null;
@@ -182,6 +186,26 @@ export interface Cafe24ActivityEvent {
   order_no: string | null;
 }
 
+export interface BackgroundJob {
+  id: number;
+  queue_name: string;
+  job_type: string;
+  job_label: string;
+  status: string;
+  triggered_by: string;
+  retry_count: number;
+  max_retries: number;
+  payload_json: Record<string, unknown> | null;
+  result_json: Record<string, unknown> | null;
+  result_preview: string | null;
+  error_message: string | null;
+  available_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Cafe24IntegrationStatus {
   merchant_id: number;
   mall_name: string;
@@ -203,6 +227,11 @@ export interface Cafe24IntegrationStatus {
   synced_claims: number;
   pending_claims: number;
   pending_webhooks: number;
+  queued_jobs: number;
+  running_jobs: number;
+  scheduled_jobs: number;
+  dead_letter_jobs: number;
   recent_events: Cafe24ActivityEvent[];
+  recent_jobs: BackgroundJob[];
   notes: string[];
 }

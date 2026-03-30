@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+import asyncio
+import logging
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -11,13 +13,38 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.api.routes import router as api_router
 from app.core.config import get_settings
 from app.db.session import bootstrap_database, reset_engine
+from app.jobs.service import run_background_job_tick
+
+
+logger = logging.getLogger(__name__)
+
+
+async def background_job_worker_loop() -> None:
+    settings = get_settings()
+    poll_seconds = max(settings.background_job_poll_seconds, 0.1)
+    while True:
+        try:
+            await asyncio.to_thread(run_background_job_tick, settings.background_job_batch_size)
+        except Exception as exc:  # pragma: no cover - defensive worker logging
+            logger.exception("Background job worker loop failed: %s", exc)
+        await asyncio.sleep(poll_seconds)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     bootstrap_database(force=True)
-    yield
-    reset_engine()
+    worker_task: asyncio.Task[None] | None = None
+    if settings.background_job_worker_enabled:
+        worker_task = asyncio.create_task(background_job_worker_loop())
+
+    try:
+        yield
+    finally:
+        if worker_task is not None:
+            worker_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await worker_task
+        reset_engine()
 
 
 settings = get_settings()

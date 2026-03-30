@@ -141,6 +141,30 @@ Relevant backend env vars live in `api/.env.example`:
 - `REPLY_DELIVERY_TIMEOUT_SECONDS`
 - `REPLY_DELIVERY_MANUAL_CHANNEL_LABEL`
 
+## Background Jobs
+
+Background jobs now back Cafe24 sync, webhook processing, and retry flows.
+
+- Redis is the primary queue backend through `REDIS_URL`
+- If Redis is unavailable, the app still persists jobs in the database and can process them through the local worker tick
+- The FastAPI app starts a lightweight worker loop by default when `BACKGROUND_JOB_WORKER_ENABLED=true`
+- The Cafe24 console and dashboard poll while jobs are queued or running, so sync/webhook state updates appear automatically
+
+Relevant backend env vars:
+
+- `REDIS_URL`
+- `BACKGROUND_JOB_WORKER_ENABLED`
+- `BACKGROUND_JOB_POLL_SECONDS`
+- `BACKGROUND_JOB_BATCH_SIZE`
+- `BACKGROUND_JOB_RETRY_BASE_SECONDS`
+- `BACKGROUND_JOB_RETRY_MAX_SECONDS`
+
+Useful job endpoints:
+
+- `GET /api/jobs`
+- `GET /api/jobs/{job_id}`
+- `POST /api/jobs/process-pending`
+
 ## One-Command Local Start
 
 If you want one command that starts the backend and serves the exported frontend through the same local server:
@@ -237,9 +261,9 @@ docker compose logs -f web
 ## Known Limitations
 
 - Authentication and tenant isolation are implemented for local operator accounts, but there is no production-grade identity provider, password reset flow, or MFA yet.
-- Redis is provisioned but not actively used yet beyond the integration boundary placeholder.
-- Cafe24 OAuth, live webhook verification, manual webhook retry, and manual Live Sync now perform real network calls when Cafe24 credentials are configured, but background jobs and full production hardening are still pending.
+- Redis-backed background jobs are implemented for the local stack, but there is not yet a separate dedicated worker deployment, queue observability pipeline, or multi-node coordination strategy.
+- Cafe24 OAuth, live webhook verification, manual webhook retry, and manual Live Sync now perform real network calls when Cafe24 credentials are configured, but full production hardening and partner validation still remain.
 - OpenAI integration is a stub and always falls back to the deterministic mock logic.
 - The UI focuses on clarity and local runnability, not production-grade design coverage.
 - Docker Compose has not been executed in this workspace because Docker is not installed here, so the container definitions were added conservatively and kept close to the already verified local commands.
-- `complete-claimmate.ps1` automates everything that is local and deterministic, but Cafe24 partner approval, real endpoint mapping, background jobs, production auth hardening, and deployment still require manual implementation work outside the current MVP.
+- `complete-claimmate.ps1` automates everything that is local and deterministic, but Cafe24 partner approval, real endpoint mapping validation, production auth hardening, and deployment still require manual implementation work outside the current MVP.

@@ -14,20 +14,27 @@ from app.integrations.cafe24.live_service import (
     connect_with_code,
     get_webhook_next_retry_at,
     ingest_live_webhook,
-    process_live_webhook_delivery,
     refresh_connection_token,
     resolve_webhook_merchant,
-    retry_failed_webhooks,
-    run_live_sync,
 )
 from app.integrations.cafe24.oauth_client import Cafe24OAuthClient
 from app.integrations.cafe24.sync_service import Cafe24SyncService
 from app.integrations.cafe24.webhooks import Cafe24WebhookHandler
+from app.jobs.service import (
+    enqueue_background_job,
+    get_background_job,
+    get_background_job_counts,
+    list_background_jobs,
+    run_background_job_tick,
+    serialize_background_job,
+)
 from app.models import Claim, ClaimCategory, ClaimStatus, OperatorUser
 from app.schemas import (
     AuthLoginRequest,
     AuthSessionMerchant,
     AuthSessionResponse,
+    BackgroundJobRead,
+    BackgroundJobRunResponse,
     Cafe24IntegrationStatus,
     Cafe24MockWebhookRequest,
     Cafe24TokenRefreshResponse,
@@ -47,7 +54,6 @@ from app.schemas import (
 )
 from app.services.auth_service import authenticate_operator, can_view_audit_logs
 from app.services.claim_service import (
-    apply_mock_webhook_to_claim,
     add_claim_note,
     build_claim_automation_summary,
     classify_claim,
@@ -117,6 +123,20 @@ def build_auth_session_payload(operator: OperatorUser) -> AuthSessionResponse:
     )
 
 
+def attach_background_job_state(
+    db: Session,
+    merchant_id: int,
+    payload: dict[str, object],
+) -> dict[str, object]:
+    counts = get_background_job_counts(db, merchant_id)
+    recent_jobs = list_background_jobs(db, merchant_id, limit=8)
+    return {
+        **payload,
+        **counts,
+        "recent_jobs": [serialize_background_job(job) for job in recent_jobs],
+    }
+
+
 def build_cafe24_service(settings) -> Cafe24SyncService:
     return Cafe24SyncService(
         Cafe24OAuthClient(
@@ -155,6 +175,38 @@ def auth_logout(request: Request) -> None:
 @router.get("/auth/session", response_model=AuthSessionResponse)
 def auth_session(operator: OperatorUser = Depends(get_current_operator)) -> AuthSessionResponse:
     return build_auth_session_payload(operator)
+
+
+@router.get("/jobs", response_model=list[BackgroundJobRead])
+def jobs_index(
+    limit: int = Query(default=20, ge=1, le=50),
+    current_operator: OperatorUser = Depends(get_current_operator),
+    db: Session = Depends(get_db),
+) -> list[BackgroundJobRead]:
+    jobs = list_background_jobs(db, current_operator.merchant_id, limit=limit, job_type_prefix="")
+    return [BackgroundJobRead.model_validate(serialize_background_job(job)) for job in jobs]
+
+
+@router.get("/jobs/{job_id}", response_model=BackgroundJobRead)
+def jobs_detail(
+    job_id: int,
+    current_operator: OperatorUser = Depends(get_current_operator),
+    db: Session = Depends(get_db),
+) -> BackgroundJobRead:
+    try:
+        job = get_background_job(db, current_operator.merchant_id, job_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return BackgroundJobRead.model_validate(serialize_background_job(job))
+
+
+@router.post("/jobs/process-pending", response_model=BackgroundJobRunResponse)
+def jobs_process_pending(
+    limit: int = Query(default=10, ge=1, le=50),
+    current_operator: OperatorUser = Depends(require_manager),
+) -> BackgroundJobRunResponse:
+    processed_job_ids = run_background_job_tick(limit=limit)
+    return BackgroundJobRunResponse(processed_job_ids=processed_job_ids)
 
 
 @router.get("/claims", response_model=list[ClaimListItem])
@@ -317,8 +369,10 @@ def cafe24_status(
     service = build_cafe24_service(settings)
     live_status = build_live_status(db, merchant, claims, settings, service.oauth_client)
     if live_status is not None:
-        return Cafe24IntegrationStatus.model_validate(live_status)
-    return Cafe24IntegrationStatus.model_validate(service.get_status(db, merchant, claims, settings))
+        return Cafe24IntegrationStatus.model_validate(attach_background_job_state(db, merchant.id, live_status))
+    return Cafe24IntegrationStatus.model_validate(
+        attach_background_job_state(db, merchant.id, service.get_status(db, merchant, claims, settings))
+    )
 
 
 @router.post("/integrations/cafe24/mock-sync", response_model=Cafe24IntegrationStatus)
@@ -329,9 +383,21 @@ def cafe24_mock_sync(
 ) -> Cafe24IntegrationStatus:
     settings = get_settings()
     merchant = get_default_merchant(db, merchant_id, current_operator)
+    enqueue_background_job(
+        db,
+        merchant_id=merchant.id,
+        job_type="cafe24.mock_sync",
+        payload_json={"merchant_id": merchant.id},
+        triggered_by=current_operator.email,
+    )
     claims = list_claims(db, merchant_id=merchant.id, operator=current_operator)
     service = build_cafe24_service(settings)
-    return Cafe24IntegrationStatus.model_validate(service.run_mock_sync(db, merchant, claims, settings))
+    live_status = build_live_status(db, merchant, claims, settings, service.oauth_client)
+    if live_status is not None:
+        return Cafe24IntegrationStatus.model_validate(attach_background_job_state(db, merchant.id, live_status))
+    return Cafe24IntegrationStatus.model_validate(
+        attach_background_job_state(db, merchant.id, service.get_status(db, merchant, claims, settings))
+    )
 
 
 @router.post("/integrations/cafe24/live-sync", response_model=Cafe24IntegrationStatus)
@@ -343,16 +409,21 @@ def cafe24_live_sync(
 ) -> Cafe24IntegrationStatus:
     settings = get_settings()
     merchant = get_default_merchant(db, merchant_id, current_operator)
+    enqueue_background_job(
+        db,
+        merchant_id=merchant.id,
+        job_type="cafe24.live_sync",
+        payload_json={"merchant_id": merchant.id, "limit": limit},
+        triggered_by=current_operator.email,
+    )
     service = build_cafe24_service(settings)
-    run_live_sync(db, merchant, service.oauth_client, settings, limit=limit)
     claims = list_claims(db, merchant_id=merchant.id, operator=current_operator)
     live_status = build_live_status(db, merchant, claims, settings, service.oauth_client)
     if live_status is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Cafe24 live sync completed but no live status is available.",
+        return Cafe24IntegrationStatus.model_validate(
+            attach_background_job_state(db, merchant.id, service.get_status(db, merchant, claims, settings))
         )
-    return Cafe24IntegrationStatus.model_validate(live_status)
+    return Cafe24IntegrationStatus.model_validate(attach_background_job_state(db, merchant.id, live_status))
 
 
 @router.post("/integrations/cafe24/clear-activity", response_model=Cafe24IntegrationStatus)
@@ -366,7 +437,9 @@ def cafe24_clear_activity(
     claims = list_claims(db, merchant_id=merchant.id, operator=current_operator)
     service = build_cafe24_service(settings)
     service.clear_activity(db, merchant.id)
-    return Cafe24IntegrationStatus.model_validate(service.get_status(db, merchant, claims, settings))
+    return Cafe24IntegrationStatus.model_validate(
+        attach_background_job_state(db, merchant.id, service.get_status(db, merchant, claims, settings))
+    )
 
 
 @router.post("/integrations/cafe24/mock-webhook", response_model=Cafe24IntegrationStatus)
@@ -378,38 +451,24 @@ def cafe24_mock_webhook(
 ) -> Cafe24IntegrationStatus:
     settings = get_settings()
     merchant = get_default_merchant(db, merchant_id, current_operator)
-    affected_claim = apply_mock_webhook_to_claim(
+    enqueue_background_job(
         db,
         merchant_id=merchant.id,
-        event_type=payload.event_type,
-        order_no=payload.order_no,
+        job_type="cafe24.mock_webhook",
+        payload_json={
+            "merchant_id": merchant.id,
+            "event_type": payload.event_type,
+            "order_no": payload.order_no,
+        },
+        triggered_by=current_operator.email,
     )
-    automation_summary: str | None = None
-    if affected_claim is not None:
-        latest_reply = next(
-            (action for action in affected_claim.suggested_actions if action.action_type == "draft_reply"),
-            None,
-        )
-        summary_parts: list[str] = []
-        if affected_claim.ai_label:
-            summary_parts.append(f"AI 분류: {affected_claim.ai_label} ({affected_claim.category.value})")
-        if latest_reply is not None:
-            summary_parts.append("답변 초안 생성 완료")
-        if summary_parts:
-            automation_summary = " / ".join(summary_parts)
     claims = list_claims(db, merchant_id=merchant.id, operator=current_operator)
     service = build_cafe24_service(settings)
+    live_status = build_live_status(db, merchant, claims, settings, service.oauth_client)
+    if live_status is not None:
+        return Cafe24IntegrationStatus.model_validate(attach_background_job_state(db, merchant.id, live_status))
     return Cafe24IntegrationStatus.model_validate(
-        service.simulate_webhook(
-            db,
-            merchant,
-            claims,
-            settings,
-            event_type=payload.event_type,
-            order_no=payload.order_no,
-            claim_id=affected_claim.id if affected_claim else None,
-            automation_summary=automation_summary,
-        )
+        attach_background_job_state(db, merchant.id, service.get_status(db, merchant, claims, settings))
     )
 
 
@@ -510,14 +569,39 @@ async def cafe24_live_webhook(
         body=raw_body,
         payload=payload,
     )
-    claim = None if duplicate else process_live_webhook_delivery(db, delivery)
+    if duplicate:
+        return Cafe24WebhookIngestResponse(
+            status="duplicate",
+            duplicate=True,
+            dedupe_key=delivery.dedupe_key,
+            event_type=delivery.event_type,
+            merchant_id=merchant.id,
+            claim_id=None,
+            retry_count=delivery.retry_count,
+            failed_reason=delivery.failed_reason,
+            processed_at=delivery.processed_at,
+            next_retry_at=get_webhook_next_retry_at(delivery),
+        )
+
+    delivery.status = "queued"
+    db.add(delivery)
+    db.commit()
+    db.refresh(delivery)
+    job = enqueue_background_job(
+        db,
+        merchant_id=merchant.id,
+        job_type="cafe24.live_webhook_delivery",
+        payload_json={"merchant_id": merchant.id, "delivery_id": delivery.id},
+        triggered_by="cafe24_webhook",
+    )
     return Cafe24WebhookIngestResponse(
-        status="duplicate" if duplicate else delivery.status,
-        duplicate=duplicate,
+        status=delivery.status,
+        duplicate=False,
         dedupe_key=delivery.dedupe_key,
         event_type=delivery.event_type,
         merchant_id=merchant.id,
-        claim_id=claim.id if claim is not None else None,
+        job_id=job.id,
+        claim_id=None,
         retry_count=delivery.retry_count,
         failed_reason=delivery.failed_reason,
         processed_at=delivery.processed_at,
@@ -533,16 +617,21 @@ def cafe24_retry_failed_live_webhooks(
 ) -> Cafe24IntegrationStatus:
     settings = get_settings()
     merchant = get_default_merchant(db, merchant_id, current_operator)
-    retry_failed_webhooks(db, merchant)
+    enqueue_background_job(
+        db,
+        merchant_id=merchant.id,
+        job_type="cafe24.retry_failed_webhooks",
+        payload_json={"merchant_id": merchant.id},
+        triggered_by=current_operator.email,
+    )
     claims = list_claims(db, merchant_id=merchant.id, operator=current_operator)
     service = build_cafe24_service(settings)
     live_status = build_live_status(db, merchant, claims, settings, service.oauth_client)
     if live_status is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Cafe24 live webhook retry completed but no live status is available.",
+        return Cafe24IntegrationStatus.model_validate(
+            attach_background_job_state(db, merchant.id, service.get_status(db, merchant, claims, settings))
         )
-    return Cafe24IntegrationStatus.model_validate(live_status)
+    return Cafe24IntegrationStatus.model_validate(attach_background_job_state(db, merchant.id, live_status))
 
 
 @router.get("/dashboard/summary", response_model=DashboardSummary)
@@ -579,6 +668,7 @@ def dashboard_summary(
     cafe24_status = build_live_status(db, merchant, claims, settings, service.oauth_client)
     if cafe24_status is None:
         cafe24_status = service.get_status(db, merchant, claims, settings)
+    cafe24_status = attach_background_job_state(db, merchant.id, cafe24_status)
     latest_event = cafe24_status["recent_events"][0] if cafe24_status["recent_events"] else None
 
     return DashboardSummary(
@@ -591,6 +681,10 @@ def dashboard_summary(
             last_synced_at=cafe24_status["last_synced_at"],
             pending_webhooks=cafe24_status["pending_webhooks"],
             recent_activity_count=len(cafe24_status["recent_events"]),
+            queued_jobs=cafe24_status["queued_jobs"],
+            running_jobs=cafe24_status["running_jobs"],
+            scheduled_jobs=cafe24_status["scheduled_jobs"],
+            dead_letter_jobs=cafe24_status["dead_letter_jobs"],
             latest_event_title=latest_event["title"] if latest_event else None,
             latest_event_status=latest_event["status"] if latest_event else None,
             latest_event_occurred_at=latest_event["occurred_at"] if latest_event else None,

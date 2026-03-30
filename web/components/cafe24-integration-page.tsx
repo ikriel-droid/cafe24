@@ -25,6 +25,13 @@ function toneForHealthStatus(status: string) {
   return "neutral";
 }
 
+function toneForJobStatus(status: string) {
+  if (status === "succeeded") return "teal";
+  if (status === "queued" || status === "running" || status === "retry_scheduled") return "accent";
+  if (status === "dead_letter") return "danger";
+  return "neutral";
+}
+
 function buildCallbackSimulationHref(merchantId: number, mode: "success" | "error") {
   const params = new URLSearchParams({
     state: `claimmate-local-${merchantId}`,
@@ -98,6 +105,19 @@ export function Cafe24IntegrationPage() {
     void loadStatus();
   }, []);
 
+  const hasActiveJobs = Boolean(status && (status.queued_jobs > 0 || status.running_jobs > 0 || status.scheduled_jobs > 0));
+
+  useEffect(() => {
+    if (!hasActiveJobs) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void loadStatus();
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [hasActiveJobs, status?.queued_jobs, status?.running_jobs, status?.scheduled_jobs]);
+
   useEffect(() => {
     if (!notice) {
       return;
@@ -159,6 +179,24 @@ export function Cafe24IntegrationPage() {
     } catch (retryError) {
       setNotice(null);
       setError(retryError instanceof Error ? retryError.message : "Cafe24 webhook 재처리에 실패했습니다.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function handleRunWorkerNow() {
+    setWorking(true);
+    setError(null);
+
+    try {
+      await apiFetch<{ processed_job_ids: number[] }>("/api/jobs/process-pending", {
+        method: "POST",
+      });
+      await loadStatus();
+      setNotice("Background worker를 즉시 한 번 실행했습니다.");
+    } catch (workerError) {
+      setNotice(null);
+      setError(workerError instanceof Error ? workerError.message : "Background worker 실행에 실패했습니다.");
     } finally {
       setWorking(false);
     }
@@ -274,6 +312,11 @@ export function Cafe24IntegrationPage() {
               <p>대기 중 문의</p>
               <div className="metric-value">{status.pending_claims}</div>
             </div>
+            <div className="card">
+              <p>Background Jobs</p>
+              <div className="metric-value">{status.queued_jobs + status.running_jobs + status.scheduled_jobs}</div>
+              <p className="metric-caption">queued {status.queued_jobs} / running {status.running_jobs} / retry {status.scheduled_jobs}</p>
+            </div>
           </section>
 
           <section className="grid cols-2">
@@ -322,6 +365,9 @@ export function Cafe24IntegrationPage() {
                 ) : (
                   <span className="muted">OAuth env를 채우면 authorize URL 미리보기를 확인할 수 있습니다.</span>
                 )}
+                <button className="button ghost" type="button" onClick={handleRunWorkerNow} disabled={working}>
+                  Run Worker Now
+                </button>
               </div>
             </div>
 
@@ -414,7 +460,58 @@ export function Cafe24IntegrationPage() {
                 Send Mock Webhook
               </button>
             </div>
-            <p className="muted">webhook을 넣으면 pending webhook 수치가 증가하고 최근 activity에 `received` 이벤트가 추가됩니다.</p>
+            <p className="muted">webhook 요청은 먼저 job queue에 들어가고, worker가 처리한 뒤 pending webhook 수치와 최근 activity가 갱신됩니다.</p>
+          </section>
+
+          <section className="card stack">
+            <div>
+              <h3>Background Jobs</h3>
+              <p>sync, webhook, retry 작업이 Redis 기반 queue를 통해 처리되고 있는지 여기서 바로 추적합니다.</p>
+            </div>
+            <div className="summary-list">
+              <div className="summary-row">
+                <span className="muted">Queued</span>
+                <strong>{status.queued_jobs}</strong>
+              </div>
+              <div className="summary-row">
+                <span className="muted">Running</span>
+                <strong>{status.running_jobs}</strong>
+              </div>
+              <div className="summary-row">
+                <span className="muted">Retry Scheduled</span>
+                <strong>{status.scheduled_jobs}</strong>
+              </div>
+              <div className="summary-row">
+                <span className="muted">Dead Letter</span>
+                <strong>{status.dead_letter_jobs}</strong>
+              </div>
+            </div>
+            {status.recent_jobs.length > 0 ? (
+              <div className="timeline">
+                {status.recent_jobs.map((job) => (
+                  <div key={job.id} className="timeline-item">
+                    <div className="actions">
+                      <strong>
+                        #{job.id} {job.job_label}
+                      </strong>
+                      <Badge tone={toneForJobStatus(job.status)}>{job.status}</Badge>
+                    </div>
+                    <p className="timeline-meta">
+                      triggered by {job.triggered_by} / retry {job.retry_count} of {job.max_retries}
+                    </p>
+                    {job.result_preview ? <p>{job.result_preview}</p> : null}
+                    {job.error_message ? <p className="timeline-meta">{job.error_message}</p> : null}
+                    <div className="actions">
+                      {job.started_at ? <span className="muted">started {formatDate(job.started_at)}</span> : null}
+                      {job.completed_at ? <span className="muted">completed {formatDate(job.completed_at)}</span> : null}
+                      {!job.completed_at && job.available_at ? <span className="muted">next run {formatDate(job.available_at)}</span> : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state">아직 기록된 background job이 없습니다.</div>
+            )}
           </section>
 
           <section className="card stack">

@@ -3,6 +3,7 @@ import hashlib
 import hmac
 from pathlib import Path
 import shutil
+import time
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -19,6 +20,35 @@ def login_as(client: TestClient, email: str = "manager@alpha-seller.local", pass
     response = client.post("/api/auth/login", json={"email": email, "password": password})
     assert response.status_code == 200
     return response.json()
+
+
+def latest_job_id(payload: dict, expected_job_type: str) -> int:
+    recent_jobs = payload.get("recent_jobs") or []
+    assert recent_jobs
+    assert recent_jobs[0]["job_type"] == expected_job_type
+    return recent_jobs[0]["id"]
+
+
+def wait_for_job(
+    client: TestClient,
+    job_id: int,
+    *,
+    terminal_statuses: tuple[str, ...] = ("succeeded", "dead_letter"),
+    timeout_seconds: float = 5.0,
+) -> dict:
+    deadline = time.monotonic() + timeout_seconds
+    last_payload: dict | None = None
+
+    while time.monotonic() < deadline:
+        client.post("/api/jobs/process-pending")
+        response = client.get(f"/api/jobs/{job_id}")
+        assert response.status_code == 200
+        last_payload = response.json()
+        if last_payload["status"] in terminal_statuses:
+            return last_payload
+        time.sleep(0.05)
+
+    raise AssertionError(f"Timed out waiting for job {job_id}. Last payload: {last_payload}")
 
 
 def test_auth_session_and_merchant_scope(monkeypatch) -> None:
@@ -457,15 +487,21 @@ def test_cafe24_mock_webhook_increases_pending_count(monkeypatch) -> None:
         )
         assert response.status_code == 200
         payload = response.json()
-        assert payload["pending_webhooks"] == base_pending + 1
-        assert payload["recent_events"][0]["event_type"] == "mock_webhook"
-        assert payload["recent_events"][0]["status"] == "received"
-        assert "CM-240301-011" in payload["recent_events"][0]["detail"]
-        assert "답변 초안 생성 완료" in payload["recent_events"][0]["detail"]
-        assert payload["recent_events"][0]["claim_id"] is not None
-        assert payload["recent_events"][0]["order_no"] == "CM-240301-011"
+        job_id = latest_job_id(payload, "cafe24.mock_webhook")
+        assert wait_for_job(client, job_id)["status"] == "succeeded"
 
-        claim_response = client.get(f"/api/claims/{payload['recent_events'][0]['claim_id']}")
+        status_response = client.get("/api/integrations/cafe24")
+        assert status_response.status_code == 200
+        status_payload = status_response.json()
+        assert status_payload["pending_webhooks"] == base_pending + 1
+        assert status_payload["recent_events"][0]["event_type"] == "mock_webhook"
+        assert status_payload["recent_events"][0]["status"] == "received"
+        assert "CM-240301-011" in status_payload["recent_events"][0]["detail"]
+        assert "답변 초안 생성 완료" in status_payload["recent_events"][0]["detail"]
+        assert status_payload["recent_events"][0]["claim_id"] is not None
+        assert status_payload["recent_events"][0]["order_no"] == "CM-240301-011"
+
+        claim_response = client.get(f"/api/claims/{status_payload['recent_events'][0]['claim_id']}")
         assert claim_response.status_code == 200
         claim_payload = claim_response.json()
         assert claim_payload["order_no"] == "CM-240301-011"
@@ -753,10 +789,12 @@ def test_cafe24_live_webhook_verifies_signature_and_dedupes(monkeypatch) -> None
         first_payload = first.json()
         assert first_payload["duplicate"] is False
         assert first_payload["event_type"] == "claim.exchange.requested"
-        assert first_payload["status"] == "processed"
-        assert first_payload["claim_id"] == 1
+        assert first_payload["status"] == "queued"
+        assert first_payload["job_id"] is not None
+        assert first_payload["claim_id"] is None
         assert first_payload["retry_count"] == 0
         assert first_payload["failed_reason"] is None
+        assert wait_for_job(client, first_payload["job_id"])["status"] == "succeeded"
 
         second = client.post("/api/integrations/cafe24/webhook/live", content=body, headers=headers)
         assert second.status_code == 202
@@ -830,10 +868,18 @@ def test_cafe24_live_webhook_failures_can_be_retried(monkeypatch) -> None:
         failed = client.post("/api/integrations/cafe24/webhook/live", content=body, headers=headers)
         assert failed.status_code == 202
         failed_payload = failed.json()
-        assert failed_payload["status"] == "failed"
-        assert failed_payload["retry_count"] == 1
-        assert failed_payload["failed_reason"] == "temporary processing failure"
-        assert failed_payload["next_retry_at"] is not None
+        assert failed_payload["status"] == "queued"
+        assert failed_payload["job_id"] is not None
+
+        failed_job = wait_for_job(
+            client,
+            failed_payload["job_id"],
+            terminal_statuses=("retry_scheduled", "dead_letter"),
+        )
+        assert failed_job["status"] == "retry_scheduled"
+        assert failed_job["retry_count"] == 1
+        assert failed_job["error_message"] == "temporary processing failure"
+        assert failed_job["available_at"] is not None
 
         status_response = client.get("/api/integrations/cafe24")
         assert status_response.status_code == 200
@@ -844,7 +890,12 @@ def test_cafe24_live_webhook_failures_can_be_retried(monkeypatch) -> None:
 
         retried = client.post("/api/integrations/cafe24/webhook/live/retry-failed")
         assert retried.status_code == 200
-        retried_payload = retried.json()
+        retry_job_id = latest_job_id(retried.json(), "cafe24.retry_failed_webhooks")
+        assert wait_for_job(client, retry_job_id)["status"] == "succeeded"
+
+        refreshed_status = client.get("/api/integrations/cafe24")
+        assert refreshed_status.status_code == 200
+        retried_payload = refreshed_status.json()
         assert retried_payload["failed_webhooks"] == 0
         assert retried_payload["retryable_webhooks"] == 0
         assert call_count["value"] == 2

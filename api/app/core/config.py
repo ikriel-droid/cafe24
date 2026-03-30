@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     reply_delivery_webhook_token: str | None = None
     reply_delivery_timeout_seconds: int = 10
     reply_delivery_manual_channel_label: str = "Cafe24 Admin Manual Handoff"
+    background_job_worker_enabled: bool = True
+    background_job_poll_seconds: float = 1.0
+    background_job_batch_size: int = 10
+    background_job_retry_base_seconds: int = 5
+    background_job_retry_max_seconds: int = 60
     seed_demo_data: bool = True
 
     @field_validator("database_url", mode="before")

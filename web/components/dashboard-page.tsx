@@ -64,6 +64,9 @@ export function DashboardPage() {
   const [copyWorkingId, setCopyWorkingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const hasActiveJobs = Boolean(
+    summary?.cafe24 && (summary.cafe24.queued_jobs > 0 || summary.cafe24.running_jobs > 0 || summary.cafe24.scheduled_jobs > 0),
+  );
 
   async function loadDashboard() {
     setLoading(true);
@@ -121,6 +124,17 @@ export function DashboardPage() {
     const timer = window.setTimeout(() => setNotice(null), 2400);
     return () => window.clearTimeout(timer);
   }, [notice]);
+
+  useEffect(() => {
+    if (!hasActiveJobs) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void loadDashboard();
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [hasActiveJobs, summary?.cafe24?.queued_jobs, summary?.cafe24?.running_jobs, summary?.cafe24?.scheduled_jobs]);
 
   const queueClaims = useMemo(() => {
     return [...claims]
@@ -409,6 +423,10 @@ export function DashboardPage() {
                 <p className="metric-caption">
                   {summary.cafe24.last_synced_at ? formatDate(summary.cafe24.last_synced_at) : "아직 sync 없음"} / pending webhook{" "}
                   {summary.cafe24.pending_webhooks}
+                </p>
+                <p className="metric-caption">
+                  queued {summary.cafe24.queued_jobs} / running {summary.cafe24.running_jobs} / retry{" "}
+                  {summary.cafe24.scheduled_jobs} / dead-letter {summary.cafe24.dead_letter_jobs}
                 </p>
                 <div className="actions">
                   {summary.cafe24.next_action_type === "mock_sync" ? (
