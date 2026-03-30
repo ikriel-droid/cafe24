@@ -102,7 +102,7 @@ npm.cmd run dev
 Open [http://127.0.0.1:3000/dashboard](http://127.0.0.1:3000/dashboard).
 The root route redirects to `/dashboard`, and `/inbox` remains the working queue view.
 
-The Cafe24 console is available at `/integrations/cafe24` and supports offline Mock Sync, simulated OAuth callback testing, live OAuth/token storage, live webhook verification, and manual Live Sync execution.
+The Cafe24 console is available at `/integrations/cafe24` and supports offline Mock Sync, simulated OAuth callback testing, live OAuth/token storage, live webhook verification, and manual Live Sync execution. Mock integration activity is now stored in the database instead of in-memory state, so status survives engine resets and app restarts.
 
 ## One-Command Local Start
 

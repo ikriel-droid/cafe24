@@ -228,7 +228,7 @@ def cafe24_status(merchant_id: int | None = None, db: Session = Depends(get_db))
     live_status = build_live_status(db, merchant, claims, settings, service.oauth_client)
     if live_status is not None:
         return Cafe24IntegrationStatus.model_validate(live_status)
-    return Cafe24IntegrationStatus.model_validate(service.get_status(merchant, claims, settings))
+    return Cafe24IntegrationStatus.model_validate(service.get_status(db, merchant, claims, settings))
 
 
 @router.post("/integrations/cafe24/mock-sync", response_model=Cafe24IntegrationStatus)
@@ -237,7 +237,7 @@ def cafe24_mock_sync(merchant_id: int | None = None, db: Session = Depends(get_d
     merchant = get_default_merchant(db, merchant_id)
     claims = list_claims(db, merchant_id=merchant.id)
     service = build_cafe24_service(settings)
-    return Cafe24IntegrationStatus.model_validate(service.run_mock_sync(merchant, claims, settings))
+    return Cafe24IntegrationStatus.model_validate(service.run_mock_sync(db, merchant, claims, settings))
 
 
 @router.post("/integrations/cafe24/live-sync", response_model=Cafe24IntegrationStatus)
@@ -266,8 +266,8 @@ def cafe24_clear_activity(merchant_id: int | None = None, db: Session = Depends(
     merchant = get_default_merchant(db, merchant_id)
     claims = list_claims(db, merchant_id=merchant.id)
     service = build_cafe24_service(settings)
-    service.clear_activity(merchant.id)
-    return Cafe24IntegrationStatus.model_validate(service.get_status(merchant, claims, settings))
+    service.clear_activity(db, merchant.id)
+    return Cafe24IntegrationStatus.model_validate(service.get_status(db, merchant, claims, settings))
 
 
 @router.post("/integrations/cafe24/mock-webhook", response_model=Cafe24IntegrationStatus)
@@ -301,6 +301,7 @@ def cafe24_mock_webhook(
     service = build_cafe24_service(settings)
     return Cafe24IntegrationStatus.model_validate(
         service.simulate_webhook(
+            db,
             merchant,
             claims,
             settings,
@@ -323,12 +324,12 @@ def cafe24_callback(
     params: dict[str, str] = {}
     service = build_cafe24_service(settings)
     merchant_id = resolve_merchant_id_from_state(state, settings.default_merchant_id)
+    merchant = get_default_merchant(db, merchant_id)
 
     if error:
         params["oauth_result"] = "error"
         params["oauth_message"] = f"Cafe24 returned an OAuth error: {error}"
     elif code:
-        merchant = get_default_merchant(db, merchant_id)
         try:
             connect_with_code(db, merchant, service.oauth_client, settings, code)
             params["oauth_result"] = "connected"
@@ -344,7 +345,8 @@ def cafe24_callback(
         params["oauth_state"] = state
 
     service.record_oauth_callback(
-        merchant_id=merchant_id,
+        db,
+        merchant,
         result=params["oauth_result"],
         message=params["oauth_message"],
         state=state,
@@ -472,7 +474,7 @@ def dashboard_summary(
     service = build_cafe24_service(settings)
     cafe24_status = build_live_status(db, merchant, claims, settings, service.oauth_client)
     if cafe24_status is None:
-        cafe24_status = service.get_status(merchant, claims, settings)
+        cafe24_status = service.get_status(db, merchant, claims, settings)
     latest_event = cafe24_status["recent_events"][0] if cafe24_status["recent_events"] else None
 
     return DashboardSummary(

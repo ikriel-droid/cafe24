@@ -394,6 +394,20 @@ def build_live_status(
     if connection is None and not has_live_configuration(settings):
         return None
 
+    if connection is not None and not has_live_configuration(settings):
+        has_live_markers = bool(
+            connection.access_token
+            or connection.connected_at
+            or (connection.last_sync_result and connection.last_sync_result.startswith("live"))
+            or session.scalar(
+                select(Cafe24WebhookDelivery.id)
+                .where(Cafe24WebhookDelivery.merchant_id == merchant.id)
+                .limit(1)
+            )
+        )
+        if not has_live_markers:
+            return None
+
     connection = connection or get_or_create_connection(session, merchant)
     now = datetime.now(UTC)
     connected_at = ensure_utc(connection.connected_at)

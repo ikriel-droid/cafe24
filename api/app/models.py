@@ -49,6 +49,7 @@ class Merchant(Base):
     claims: Mapped[list["Claim"]] = relationship(back_populates="merchant")
     cafe24_connection: Mapped["Cafe24Connection | None"] = relationship(back_populates="merchant", uselist=False)
     cafe24_webhook_deliveries: Mapped[list["Cafe24WebhookDelivery"]] = relationship(back_populates="merchant")
+    cafe24_integration_events: Mapped[list["Cafe24IntegrationEvent"]] = relationship(back_populates="merchant")
 
 
 class Policy(Base):
@@ -189,6 +190,7 @@ class Cafe24Connection(Base):
 
     merchant: Mapped["Merchant"] = relationship(back_populates="cafe24_connection")
     webhook_deliveries: Mapped[list["Cafe24WebhookDelivery"]] = relationship(back_populates="connection")
+    integration_events: Mapped[list["Cafe24IntegrationEvent"]] = relationship(back_populates="connection")
 
 
 class Cafe24WebhookDelivery(Base):
@@ -216,3 +218,23 @@ class Cafe24WebhookDelivery(Base):
 
     merchant: Mapped["Merchant"] = relationship(back_populates="cafe24_webhook_deliveries")
     connection: Mapped["Cafe24Connection | None"] = relationship(back_populates="webhook_deliveries")
+
+
+class Cafe24IntegrationEvent(Base):
+    __tablename__ = "cafe24_integration_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    merchant_id: Mapped[int] = mapped_column(ForeignKey("merchants.id"), nullable=False, index=True)
+    connection_id: Mapped[int | None] = mapped_column(ForeignKey("cafe24_connections.id"), nullable=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    detail: Mapped[str] = mapped_column(Text, nullable=False)
+    batch_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    claim_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    order_no: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    merchant: Mapped["Merchant"] = relationship(back_populates="cafe24_integration_events")
+    connection: Mapped["Cafe24Connection | None"] = relationship(back_populates="integration_events")

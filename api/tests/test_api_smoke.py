@@ -686,6 +686,37 @@ def test_cafe24_activity_can_be_cleared(monkeypatch) -> None:
         assert payload["last_sync_result"] == "mock_completed"
 
 
+def test_mock_cafe24_status_persists_after_engine_reset(monkeypatch) -> None:
+    temp_root = Path(".tmp") / "tests" / "cafe24-mock-persist"
+    if temp_root.exists():
+        shutil.rmtree(temp_root)
+    temp_root.mkdir(parents=True, exist_ok=True)
+
+    database_url = f"sqlite:///{temp_root.joinpath('claimmate-test.db').resolve().as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("SEED_DEMO_DATA", "true")
+    Cafe24SyncService.reset_state()
+    get_settings.cache_clear()
+    reset_engine()
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        synced = client.post("/api/integrations/cafe24/mock-sync")
+        assert synced.status_code == 200
+        assert synced.json()["last_sync_result"] == "mock_completed"
+
+    get_settings.cache_clear()
+    reset_engine()
+
+    with TestClient(app) as client:
+        status = client.get("/api/integrations/cafe24")
+        assert status.status_code == 200
+        payload = status.json()
+        assert payload["last_sync_result"] == "mock_completed"
+        assert payload["recent_events"][0]["event_type"] == "mock_sync"
+
+
 def test_dashboard_summary_includes_cafe24_overview(monkeypatch) -> None:
     temp_root = Path(".tmp") / "tests" / "dashboard-cafe24"
     if temp_root.exists():
