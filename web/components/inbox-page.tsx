@@ -310,6 +310,10 @@ export function InboxPage() {
     await handleSyncAction("/api/integrations/cafe24/live-sync", "Cafe24 Live Sync 실행에 실패했습니다.");
   }
 
+  async function handleRetryFailedWebhooks() {
+    await handleSyncAction("/api/integrations/cafe24/webhook/live/retry-failed", "Cafe24 webhook 재처리에 실패했습니다.");
+  }
+
   function resetFilters() {
     setSearchText("");
     setCategory("");
@@ -397,6 +401,10 @@ export function InboxPage() {
                 </button>
               ) : syncStatus.next_action_type === "live_sync" ? (
                 <button className="button secondary" type="button" onClick={handleRunLiveSync} disabled={syncWorking}>
+                  {syncStatus.next_action_label}
+                </button>
+              ) : syncStatus.next_action_type === "retry_failed_webhooks" ? (
+                <button className="button secondary" type="button" onClick={handleRetryFailedWebhooks} disabled={syncWorking}>
                   {syncStatus.next_action_label}
                 </button>
               ) : syncStatus.next_action_href ? (
@@ -504,6 +512,10 @@ export function InboxPage() {
                   </button>
                 ) : summary.cafe24.next_action_type === "live_sync" ? (
                   <button className="button secondary" type="button" onClick={handleRunLiveSync} disabled={syncWorking}>
+                    {summary.cafe24.next_action_label}
+                  </button>
+                ) : summary.cafe24.next_action_type === "retry_failed_webhooks" ? (
+                  <button className="button secondary" type="button" onClick={handleRetryFailedWebhooks} disabled={syncWorking}>
                     {summary.cafe24.next_action_label}
                   </button>
                 ) : summary.cafe24.next_action_href ? (

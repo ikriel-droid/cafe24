@@ -250,6 +250,14 @@ export function DashboardPage() {
     );
   }
 
+  async function handleRetryFailedWebhooks() {
+    await handleSyncAction(
+      "/api/integrations/cafe24/webhook/live/retry-failed",
+      "Cafe24 webhook 재처리에 실패했습니다.",
+      "실패한 Cafe24 webhook 재처리를 실행했습니다."
+    );
+  }
+
   async function handleQuickSendDraft(claimId: number) {
     setAutomationWorkingId(claimId);
     setError(null);
@@ -409,6 +417,10 @@ export function DashboardPage() {
                     </button>
                   ) : summary.cafe24.next_action_type === "live_sync" ? (
                     <button className="button secondary" type="button" onClick={handleRunLiveSync} disabled={working}>
+                      {summary.cafe24.next_action_label}
+                    </button>
+                  ) : summary.cafe24.next_action_type === "retry_failed_webhooks" ? (
+                    <button className="button secondary" type="button" onClick={handleRetryFailedWebhooks} disabled={working}>
                       {summary.cafe24.next_action_label}
                     </button>
                   ) : summary.cafe24.next_action_href ? (

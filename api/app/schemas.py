@@ -144,6 +144,11 @@ class Cafe24WebhookIngestResponse(BaseModel):
     dedupe_key: str
     event_type: str
     merchant_id: int
+    claim_id: int | None = None
+    retry_count: int = 0
+    failed_reason: str | None = None
+    processed_at: datetime | None = None
+    next_retry_at: datetime | None = None
 
 
 class Cafe24ActivityEvent(BaseModel):
@@ -183,6 +188,8 @@ class Cafe24IntegrationStatus(BaseModel):
     synced_claims: int
     pending_claims: int
     pending_webhooks: int
+    failed_webhooks: int = 0
+    retryable_webhooks: int = 0
     recent_events: list[Cafe24ActivityEvent]
     notes: list[str]
 

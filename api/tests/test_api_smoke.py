@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.db.session import reset_engine
 from app.integrations.cafe24.oauth_client import Cafe24OAuthTokens
 from app.integrations.cafe24.sync_service import Cafe24SyncService
+from app.models import Claim
 
 
 def test_claim_reply_send_can_keep_claim_open(monkeypatch) -> None:
@@ -562,6 +563,10 @@ def test_cafe24_live_webhook_verifies_signature_and_dedupes(monkeypatch) -> None
         first_payload = first.json()
         assert first_payload["duplicate"] is False
         assert first_payload["event_type"] == "claim.exchange.requested"
+        assert first_payload["status"] == "processed"
+        assert first_payload["claim_id"] == 1
+        assert first_payload["retry_count"] == 0
+        assert first_payload["failed_reason"] is None
 
         second = client.post("/api/integrations/cafe24/webhook/live", content=body, headers=headers)
         assert second.status_code == 202
@@ -574,8 +579,84 @@ def test_cafe24_live_webhook_verifies_signature_and_dedupes(monkeypatch) -> None
         status_payload = status_response.json()
         assert status_payload["connected"] is True
         assert status_payload["webhook_endpoint_ready"] is True
-        assert status_payload["pending_webhooks"] == 1
+        assert status_payload["pending_webhooks"] == 0
+        assert status_payload["failed_webhooks"] == 0
         assert status_payload["recent_events"][0]["event_type"] == "live_webhook"
+
+
+def test_cafe24_live_webhook_failures_can_be_retried(monkeypatch) -> None:
+    temp_root = Path(".tmp") / "tests" / "cafe24-live-webhook-retry"
+    if temp_root.exists():
+        shutil.rmtree(temp_root)
+    temp_root.mkdir(parents=True, exist_ok=True)
+
+    database_url = f"sqlite:///{temp_root.joinpath('claimmate-test.db').resolve().as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("SEED_DEMO_DATA", "true")
+    monkeypatch.setenv("CAFE24_CLIENT_ID", "demo-client")
+    monkeypatch.setenv("CAFE24_CLIENT_SECRET", "demo-secret")
+    monkeypatch.setenv("CAFE24_REDIRECT_URI", "http://127.0.0.1:8000/api/integrations/cafe24/callback")
+    monkeypatch.setenv("CAFE24_WEBHOOK_SECRET", "super-secret")
+    get_settings.cache_clear()
+    reset_engine()
+
+    def fake_exchange_code(self, mall_id: str, code: str) -> Cafe24OAuthTokens:
+        return Cafe24OAuthTokens(
+            access_token="live-access-token",
+            refresh_token="live-refresh-token",
+            token_type="Bearer",
+            access_token_expires_at=datetime.now(UTC) + timedelta(hours=2),
+            refresh_token_expires_at=datetime.now(UTC) + timedelta(days=30),
+            scopes=["mall.read_order"],
+            raw_response={"access_token": "live-access-token"},
+        )
+
+    call_count = {"value": 0}
+
+    def flaky_process(session, merchant_id: int, event_type: str, payload: dict[str, object]):
+        call_count["value"] += 1
+        if call_count["value"] == 1:
+            raise ValueError("temporary processing failure")
+        return session.get(Claim, 1)
+
+    monkeypatch.setattr("app.integrations.cafe24.oauth_client.Cafe24OAuthClient.exchange_code", fake_exchange_code)
+    monkeypatch.setattr("app.integrations.cafe24.live_service.process_live_webhook_claim", flaky_process)
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        client.get("/api/integrations/cafe24/callback?code=live-code&state=claimmate-live-1", follow_redirects=False)
+
+        body = b'{"mall_id":"alpha-seller","event_type":"claim.exchange.requested","order_no":"CM-240301-001"}'
+        signature = base64.b64encode(hmac.new(b"super-secret", body, hashlib.sha256).digest()).decode("utf-8")
+        headers = {
+            "content-type": "application/json",
+            "x-cafe24-signature": signature,
+            "x-cafe24-delivery-id": "delivery-retry-1",
+            "x-cafe24-event-type": "claim.exchange.requested",
+        }
+
+        failed = client.post("/api/integrations/cafe24/webhook/live", content=body, headers=headers)
+        assert failed.status_code == 202
+        failed_payload = failed.json()
+        assert failed_payload["status"] == "failed"
+        assert failed_payload["retry_count"] == 1
+        assert failed_payload["failed_reason"] == "temporary processing failure"
+        assert failed_payload["next_retry_at"] is not None
+
+        status_response = client.get("/api/integrations/cafe24")
+        assert status_response.status_code == 200
+        status_payload = status_response.json()
+        assert status_payload["failed_webhooks"] == 1
+        assert status_payload["retryable_webhooks"] == 1
+        assert status_payload["next_action_type"] == "retry_failed_webhooks"
+
+        retried = client.post("/api/integrations/cafe24/webhook/live/retry-failed")
+        assert retried.status_code == 200
+        retried_payload = retried.json()
+        assert retried_payload["failed_webhooks"] == 0
+        assert retried_payload["retryable_webhooks"] == 0
+        assert call_count["value"] == 2
 
 
 def test_cafe24_activity_can_be_cleared(monkeypatch) -> None:

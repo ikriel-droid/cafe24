@@ -11,9 +11,12 @@ from app.db.session import get_db
 from app.integrations.cafe24.live_service import (
     build_live_status,
     connect_with_code,
+    get_webhook_next_retry_at,
     ingest_live_webhook,
+    process_live_webhook_delivery,
     refresh_connection_token,
     resolve_webhook_merchant,
+    retry_failed_webhooks,
     run_live_sync,
 )
 from app.integrations.cafe24.oauth_client import Cafe24OAuthClient
@@ -404,13 +407,38 @@ async def cafe24_live_webhook(
         body=raw_body,
         payload=payload,
     )
+    claim = None if duplicate else process_live_webhook_delivery(db, delivery)
     return Cafe24WebhookIngestResponse(
         status="duplicate" if duplicate else delivery.status,
         duplicate=duplicate,
         dedupe_key=delivery.dedupe_key,
         event_type=delivery.event_type,
         merchant_id=merchant.id,
+        claim_id=claim.id if claim is not None else None,
+        retry_count=delivery.retry_count,
+        failed_reason=delivery.failed_reason,
+        processed_at=delivery.processed_at,
+        next_retry_at=get_webhook_next_retry_at(delivery),
     )
+
+
+@router.post("/integrations/cafe24/webhook/live/retry-failed", response_model=Cafe24IntegrationStatus)
+def cafe24_retry_failed_live_webhooks(
+    merchant_id: int | None = None,
+    db: Session = Depends(get_db),
+) -> Cafe24IntegrationStatus:
+    settings = get_settings()
+    merchant = get_default_merchant(db, merchant_id)
+    retry_failed_webhooks(db, merchant)
+    claims = list_claims(db, merchant_id=merchant.id)
+    service = build_cafe24_service(settings)
+    live_status = build_live_status(db, merchant, claims, settings, service.oauth_client)
+    if live_status is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Cafe24 live webhook retry completed but no live status is available.",
+        )
+    return Cafe24IntegrationStatus.model_validate(live_status)
 
 
 @router.get("/dashboard/summary", response_model=DashboardSummary)

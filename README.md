@@ -201,7 +201,7 @@ docker compose logs -f web
 
 - Authentication and tenant isolation are intentionally omitted.
 - Redis is provisioned but not actively used yet beyond the integration boundary placeholder.
-- Cafe24 OAuth, live webhook verification, and manual Live Sync now perform real network calls when Cafe24 credentials are configured, but retry policies, background jobs, and full production hardening are still pending.
+- Cafe24 OAuth, live webhook verification, manual webhook retry, and manual Live Sync now perform real network calls when Cafe24 credentials are configured, but background jobs and full production hardening are still pending.
 - OpenAI integration is a stub and always falls back to the deterministic mock logic.
 - The UI focuses on clarity and local runnability, not production-grade design coverage.
 - Docker Compose has not been executed in this workspace because Docker is not installed here, so the container definitions were added conservatively and kept close to the already verified local commands.

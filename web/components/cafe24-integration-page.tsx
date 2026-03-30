@@ -146,6 +146,24 @@ export function Cafe24IntegrationPage() {
     }
   }
 
+  async function handleRetryFailedWebhooks() {
+    setWorking(true);
+    setError(null);
+
+    try {
+      const data = await apiFetch<Cafe24IntegrationStatus>("/api/integrations/cafe24/webhook/live/retry-failed", {
+        method: "POST",
+      });
+      setStatus(data);
+      setNotice("실패한 Cafe24 webhook 재처리를 실행했습니다.");
+    } catch (retryError) {
+      setNotice(null);
+      setError(retryError instanceof Error ? retryError.message : "Cafe24 webhook 재처리에 실패했습니다.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
   async function handleClearActivity() {
     setWorking(true);
     setError(null);
@@ -203,6 +221,14 @@ export function Cafe24IntegrationPage() {
     if (status.next_action_type === "live_sync") {
       return (
         <button className="button" onClick={handleLiveSync} disabled={working}>
+          {status.next_action_label}
+        </button>
+      );
+    }
+
+    if (status.next_action_type === "retry_failed_webhooks") {
+      return (
+        <button className="button" onClick={handleRetryFailedWebhooks} disabled={working}>
           {status.next_action_label}
         </button>
       );

@@ -167,7 +167,12 @@ def build_claim_automation_summary(claim: Claim) -> dict[str, object]:
         (
             log
             for log in claim.audit_logs
-            if log.event_type in {"cafe24_mock_webhook_auto_triaged", "cafe24_live_sync_auto_triaged"}
+            if log.event_type
+            in {
+                "cafe24_mock_webhook_auto_triaged",
+                "cafe24_live_sync_auto_triaged",
+                "cafe24_live_webhook_auto_triaged",
+            }
         ),
         None,
     )
@@ -429,6 +434,80 @@ def apply_mock_webhook_to_claim(
         claim_id=claim.id,
         actor="cafe24_mock_webhook",
         event_type="cafe24_mock_webhook_auto_triaged",
+        payload_json={
+            "category": classification.category.value,
+            "ai_label": classification.label,
+            "urgency": classification.urgency.value,
+            "classification_confidence": classification.confidence,
+            "draft_confidence": draft_reply.confidence,
+            "source_event": event_type,
+        },
+    )
+    session.commit()
+    session.expire_all()
+    return get_claim(session, claim.id)
+
+
+def apply_live_webhook_to_claim(
+    session: Session,
+    merchant_id: int,
+    event_type: str,
+    order_no: str | None = None,
+) -> Claim | None:
+    if not order_no:
+        return None
+
+    rule = MOCK_WEBHOOK_RULES.get(event_type)
+    if rule is None:
+        return None
+
+    query = select(Claim).where(Claim.merchant_id == merchant_id, Claim.order_no == order_no)
+    claim = session.scalar(query)
+    if claim is None:
+        return None
+
+    previous_category = claim.category.value
+    previous_status = claim.status.value
+    previous_urgency = claim.urgency.value
+
+    claim.category = rule["category"]
+    claim.status = rule["status"]
+    claim.urgency = rule["urgency"]
+
+    session.add(
+        ClaimMessage(
+            claim_id=claim.id,
+            role="system",
+            body=f"Cafe24 live webhook으로 {claim.order_no} 주문의 {event_type} 이벤트를 접수했습니다.",
+        )
+    )
+    record_audit_log(
+        session,
+        claim_id=claim.id,
+        actor="cafe24_live_webhook",
+        event_type="cafe24_live_webhook_received",
+        payload_json={
+            "event_type": event_type,
+            "order_no": claim.order_no,
+            "previous_category": previous_category,
+            "previous_status": previous_status,
+            "previous_urgency": previous_urgency,
+            "next_category": claim.category.value,
+            "next_status": claim.status.value,
+            "next_urgency": claim.urgency.value,
+        },
+    )
+    session.add(claim)
+    session.commit()
+
+    classification = classify_claim(session, claim.id)
+    draft_reply = generate_draft_reply(session, claim.id)
+
+    record_audit_log(
+        session,
+        claim_id=claim.id,
+        actor="cafe24_live_webhook",
+        event_type="cafe24_live_webhook_auto_triaged",
         payload_json={
             "category": classification.category.value,
             "ai_label": classification.label,

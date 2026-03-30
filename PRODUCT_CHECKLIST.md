@@ -23,7 +23,7 @@
 - [x] Cafe24 webhook 실제 엔드포인트 연결
 - [x] webhook 서명 검증 및 위변조 방지
 - [x] webhook 중복 수신 방지 키 처리
-- [ ] webhook 실패 재시도 정책 정리
+- [x] webhook 실패 재시도 정책 정리
 - [ ] mock integration 상태를 실제 integration 상태 모델로 치환
 
 ## 2. Reply Delivery

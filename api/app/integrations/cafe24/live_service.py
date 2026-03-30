@@ -18,7 +18,12 @@ from app.models import (
     ClaimUrgency,
     Merchant,
 )
-from app.services.claim_service import classify_claim, generate_draft_reply, record_audit_log
+from app.services.claim_service import (
+    apply_live_webhook_to_claim,
+    classify_claim,
+    generate_draft_reply,
+    record_audit_log,
+)
 
 from .oauth_client import Cafe24OAuthClient, Cafe24OAuthTokens
 from .webhooks import Cafe24WebhookHandler, Cafe24WebhookVerificationError
@@ -39,6 +44,8 @@ CATEGORY_LABELS: dict[ClaimCategory, str] = {
     ClaimCategory.REFUND: "환불",
     ClaimCategory.DELIVERY: "배송",
 }
+
+MAX_WEBHOOK_RETRIES = 3
 
 
 def has_live_configuration(settings: Settings) -> bool:
@@ -220,6 +227,85 @@ def ingest_live_webhook(
     return delivery, False
 
 
+def get_webhook_next_retry_at(delivery: Cafe24WebhookDelivery) -> datetime | None:
+    if delivery.status not in {"failed", "received"}:
+        return None
+    if delivery.retry_count >= MAX_WEBHOOK_RETRIES:
+        return None
+
+    base_time = ensure_utc(delivery.updated_at) or ensure_utc(delivery.received_at) or datetime.now(UTC)
+    delay_minutes = 5 * (2 ** max(delivery.retry_count - 1, 0))
+    return base_time + timedelta(minutes=min(delay_minutes, 60))
+
+
+def process_live_webhook_claim(
+    session: Session,
+    merchant_id: int,
+    event_type: str,
+    payload: dict[str, Any],
+) -> Claim | None:
+    order_no = _coalesce_string(payload, "order_no", "data.order_no", "order.order_no", "resource.order_no")
+    if not order_no:
+        raise ValueError("Cafe24 webhook payload does not include order_no.")
+
+    claim = apply_live_webhook_to_claim(
+        session,
+        merchant_id=merchant_id,
+        event_type=event_type,
+        order_no=order_no,
+    )
+    if claim is None:
+        raise ValueError(f"No local claim matched Cafe24 webhook order_no={order_no}.")
+    return claim
+
+
+def process_live_webhook_delivery(
+    session: Session,
+    delivery: Cafe24WebhookDelivery,
+) -> Claim | None:
+    payload = delivery.payload_json if isinstance(delivery.payload_json, dict) else {}
+    try:
+        claim = process_live_webhook_claim(session, delivery.merchant_id, delivery.event_type, payload)
+        delivery.status = "processed"
+        delivery.processed_at = datetime.now(UTC)
+        delivery.failed_reason = None
+        session.add(delivery)
+        session.commit()
+        session.refresh(delivery)
+        return claim
+    except Exception as exc:
+        delivery.retry_count += 1
+        delivery.status = "dead_letter" if delivery.retry_count >= MAX_WEBHOOK_RETRIES else "failed"
+        delivery.failed_reason = str(exc)
+        delivery.processed_at = None
+        session.add(delivery)
+        session.commit()
+        session.refresh(delivery)
+        return None
+
+
+def retry_failed_webhooks(
+    session: Session,
+    merchant: Merchant,
+    *,
+    limit: int = 10,
+) -> list[Cafe24WebhookDelivery]:
+    deliveries = list(
+        session.scalars(
+            select(Cafe24WebhookDelivery)
+            .where(
+                Cafe24WebhookDelivery.merchant_id == merchant.id,
+                Cafe24WebhookDelivery.status.in_(("failed", "received")),
+            )
+            .order_by(Cafe24WebhookDelivery.received_at.asc())
+            .limit(limit)
+        )
+    )
+    for delivery in deliveries:
+        process_live_webhook_delivery(session, delivery)
+    return deliveries
+
+
 def run_live_sync(
     session: Session,
     merchant: Merchant,
@@ -326,6 +412,19 @@ def build_live_status(
         )
     )
     pending_webhooks = sum(delivery.processed_at is None for delivery in recent_deliveries)
+    failed_deliveries = list(
+        session.scalars(
+            select(Cafe24WebhookDelivery)
+            .where(
+                Cafe24WebhookDelivery.merchant_id == merchant.id,
+                Cafe24WebhookDelivery.status.in_(("failed", "dead_letter")),
+            )
+            .order_by(Cafe24WebhookDelivery.received_at.desc())
+            .limit(10)
+        )
+    )
+    failed_webhook_count = len(failed_deliveries)
+    retryable_webhook_count = sum(delivery.retry_count < MAX_WEBHOOK_RETRIES for delivery in failed_deliveries)
     webhook_secret_configured = bool(settings.cafe24_webhook_secret)
 
     recent_events: list[dict[str, object]] = []
@@ -369,16 +468,23 @@ def build_live_status(
             }
         )
     for delivery in recent_deliveries:
+        retry_at = get_webhook_next_retry_at(delivery)
+        order_no = _coalesce_string(delivery.payload_json if isinstance(delivery.payload_json, dict) else {}, "order_no")
+        detail = f"dedupe_key={delivery.dedupe_key}"
+        if delivery.failed_reason:
+            detail = f"{detail} / failed_reason={delivery.failed_reason}"
+        if retry_at is not None:
+            detail = f"{detail} / next_retry_at={retry_at.isoformat()}"
         recent_events.append(
             {
                 "occurred_at": ensure_utc(delivery.received_at) or now,
                 "event_type": "live_webhook",
                 "status": delivery.status,
                 "title": f"{delivery.event_type} webhook received",
-                "detail": f"dedupe_key={delivery.dedupe_key}",
+                "detail": detail,
                 "batch_id": None,
                 "claim_id": None,
-                "order_no": None,
+                "order_no": order_no,
             }
         )
     event_priority = {
@@ -421,6 +527,13 @@ def build_live_status(
         next_action_type = "open_link"
         next_action_label = "Refresh Token"
         next_action_href = "/integrations/cafe24"
+    elif retryable_webhook_count > 0:
+        health_status = "attention"
+        health_title = "Webhook 재시도 필요"
+        health_detail = f"실패한 Cafe24 webhook {failed_webhook_count}건 중 {retryable_webhook_count}건을 다시 처리할 수 있습니다."
+        next_action_type = "retry_failed_webhooks"
+        next_action_label = "Retry Failed Webhooks"
+        next_action_href = None
     elif initial_sync_needed:
         health_status = "setup_needed"
         health_title = "초기 Live Sync 필요"
@@ -482,11 +595,14 @@ def build_live_status(
         "synced_claims": connection.synced_claims,
         "pending_claims": pending_claims,
         "pending_webhooks": pending_webhooks,
+        "failed_webhooks": failed_webhook_count,
+        "retryable_webhooks": retryable_webhook_count,
         "recent_events": recent_events[:8],
         "notes": [
             "Cafe24 OAuth callback은 실제 token exchange를 수행합니다.",
             "Webhook endpoint는 서명 검증과 dedupe 처리까지 수행합니다.",
             "Live sync는 주문과 배송 응답을 기준으로 클레임 후보를 로컬 Claim으로 반영합니다.",
+            "실패한 webhook은 retry_count와 failed_reason을 남기고 재시도 대상으로 유지합니다.",
         ],
     }
 
