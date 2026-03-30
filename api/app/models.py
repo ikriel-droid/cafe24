@@ -37,6 +37,16 @@ class ClaimUrgency(str, Enum):
     HIGH = "high"
 
 
+class ReplyDeliveryChannel(str, Enum):
+    MANUAL_HANDOFF = "manual_handoff"
+    WEBHOOK = "webhook"
+
+
+class ReplyDeliveryStatus(str, Enum):
+    SENT = "sent"
+    FAILED = "failed"
+
+
 class Merchant(Base):
     __tablename__ = "merchants"
 
@@ -121,6 +131,11 @@ class Claim(Base):
         cascade="all, delete-orphan",
         order_by=lambda: (AuditLog.created_at.desc(), AuditLog.id.desc()),
     )
+    reply_deliveries: Mapped[list["ReplyDelivery"]] = relationship(
+        back_populates="claim",
+        cascade="all, delete-orphan",
+        order_by=lambda: (ReplyDelivery.created_at.desc(), ReplyDelivery.id.desc()),
+    )
 
 
 class ClaimMessage(Base):
@@ -160,6 +175,41 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     claim: Mapped["Claim"] = relationship(back_populates="audit_logs")
+
+
+class ReplyDelivery(Base):
+    __tablename__ = "reply_deliveries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    claim_id: Mapped[int] = mapped_column(ForeignKey("claims.id"), nullable=False, index=True)
+    actor: Mapped[str] = mapped_column(String(64), nullable=False)
+    attempt_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    channel: Mapped[ReplyDeliveryChannel] = mapped_column(
+        SqlEnum(ReplyDeliveryChannel, native_enum=False),
+        nullable=False,
+        default=ReplyDeliveryChannel.MANUAL_HANDOFF,
+    )
+    status: Mapped[ReplyDeliveryStatus] = mapped_column(
+        SqlEnum(ReplyDeliveryStatus, native_enum=False),
+        nullable=False,
+        default=ReplyDeliveryStatus.SENT,
+    )
+    provider: Mapped[str] = mapped_column(String(64), nullable=False, default="manual_handoff")
+    destination: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reply_body: Mapped[str] = mapped_column(Text, nullable=False)
+    external_delivery_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    request_payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    response_payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    claim: Mapped["Claim"] = relationship(back_populates="reply_deliveries")
 
 
 class Cafe24Connection(Base):

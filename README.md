@@ -104,6 +104,27 @@ The root route redirects to `/dashboard`, and `/inbox` remains the working queue
 
 The Cafe24 console is available at `/integrations/cafe24` and supports offline Mock Sync, simulated OAuth callback testing, live OAuth/token storage, live webhook verification, and manual Live Sync execution. Mock integration activity is now stored in the database instead of in-memory state, so status survives engine resets and app restarts.
 
+## Reply Delivery Modes
+
+Reply delivery now has an explicit boundary instead of a pure placeholder.
+
+- `REPLY_DELIVERY_MODE=manual_handoff`
+  - Default local mode
+  - Records that an operator handed off the reply through the merchant support channel
+  - Marks the send as successful and stores a delivery attempt history row
+- `REPLY_DELIVERY_MODE=webhook`
+  - Sends the reply payload to `REPLY_DELIVERY_WEBHOOK_URL`
+  - Stores success / failure / retry history in the database
+  - Useful when wiring ClaimMate into a downstream outbound messaging adapter
+
+Relevant backend env vars live in `api/.env.example`:
+
+- `REPLY_DELIVERY_MODE`
+- `REPLY_DELIVERY_WEBHOOK_URL`
+- `REPLY_DELIVERY_WEBHOOK_TOKEN`
+- `REPLY_DELIVERY_TIMEOUT_SECONDS`
+- `REPLY_DELIVERY_MANUAL_CHANNEL_LABEL`
+
 ## One-Command Local Start
 
 If you want one command that starts the backend and serves the exported frontend through the same local server:

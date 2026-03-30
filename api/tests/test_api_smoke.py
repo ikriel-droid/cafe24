@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 from datetime import UTC, datetime, timedelta
 
+import httpx
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
@@ -40,6 +41,11 @@ def test_claim_reply_send_can_keep_claim_open(monkeypatch) -> None:
         assert payload["automation"]["reply_sent"] is True
         assert payload["automation"]["follow_up_needed"] is True
         assert payload["automation"]["reply_sent_by"] == "qa_operator"
+        assert payload["automation"]["latest_delivery_status"] == "sent"
+        assert payload["automation"]["latest_delivery_channel"] == "manual_handoff"
+        assert payload["automation"]["delivery_attempt_count"] == 1
+        assert payload["reply_deliveries"][0]["status"] == "sent"
+        assert payload["reply_deliveries"][0]["channel"] == "manual_handoff"
         assert payload["audit_logs"][0]["event_type"] == "reply_sent"
         assert payload["audit_logs"][0]["payload_json"]["mark_done"] is False
 
@@ -83,6 +89,8 @@ def test_reply_sent_filter_and_summary(monkeypatch) -> None:
         assert payload["automation"]["follow_up_needed"] is False
         assert payload["automation"]["reply_sent_at"] is not None
         assert payload["automation"]["reply_sent_by"] == "qa_operator"
+        assert payload["automation"]["latest_delivery_status"] == "sent"
+        assert payload["reply_deliveries"][0]["status"] == "sent"
 
         filtered_claims = client.get("/api/claims?reply_sent=true")
         assert filtered_claims.status_code == 200
@@ -133,6 +141,77 @@ def test_claim_reply_send_records_message_and_completes_claim(monkeypatch) -> No
         assert payload["audit_logs"][0]["actor"] == "qa_operator"
         assert payload["audit_logs"][0]["payload_json"]["mark_done"] is True
         assert payload["audit_logs"][0]["payload_json"]["source"] == "manual_edit"
+        assert payload["reply_deliveries"][0]["status"] == "sent"
+        assert payload["reply_deliveries"][0]["channel"] == "manual_handoff"
+
+
+def test_reply_delivery_failure_can_be_retried(monkeypatch) -> None:
+    temp_root = Path(".tmp") / "tests" / "reply-delivery-retry"
+    if temp_root.exists():
+        shutil.rmtree(temp_root)
+    temp_root.mkdir(parents=True, exist_ok=True)
+
+    database_url = f"sqlite:///{temp_root.joinpath('claimmate-test.db').resolve().as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("SEED_DEMO_DATA", "true")
+    monkeypatch.setenv("REPLY_DELIVERY_MODE", "webhook")
+    monkeypatch.setenv("REPLY_DELIVERY_WEBHOOK_URL", "https://reply-delivery.test/send")
+    get_settings.cache_clear()
+    reset_engine()
+
+    call_count = {"value": 0}
+
+    class FakeWebhookClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, json=None, headers=None):
+            assert url == "https://reply-delivery.test/send"
+            call_count["value"] += 1
+            if call_count["value"] == 1:
+                return httpx.Response(502, json={"error": "upstream unavailable"})
+            return httpx.Response(200, json={"delivery_id": "delivery-2", "status": "sent"})
+
+    monkeypatch.setattr("app.reply_delivery.webhook_provider.httpx.Client", FakeWebhookClient)
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        client.post("/api/claims/1/draft-reply")
+
+        failed = client.post(
+            "/api/claims/1/send-reply",
+            json={"reply_body": "retry me", "actor": "qa_operator", "mark_done": True},
+        )
+        assert failed.status_code == 502
+
+        detail_after_failure = client.get("/api/claims/1")
+        assert detail_after_failure.status_code == 200
+        failed_payload = detail_after_failure.json()
+        assert failed_payload["automation"]["reply_sent"] is False
+        assert failed_payload["automation"]["latest_delivery_status"] == "failed"
+        assert failed_payload["automation"]["can_retry_delivery"] is True
+        assert failed_payload["reply_deliveries"][0]["status"] == "failed"
+
+        retried = client.post(
+            "/api/claims/1/retry-reply-delivery",
+            json={"actor": "qa_operator", "mark_done": True},
+        )
+        assert retried.status_code == 200
+        retried_payload = retried.json()
+        assert retried_payload["status"] == "done"
+        assert retried_payload["automation"]["reply_sent"] is True
+        assert retried_payload["automation"]["latest_delivery_status"] == "sent"
+        assert retried_payload["automation"]["delivery_attempt_count"] == 2
+        assert retried_payload["reply_deliveries"][0]["status"] == "sent"
+        assert retried_payload["reply_deliveries"][1]["status"] == "failed"
+        assert retried_payload["audit_logs"][0]["event_type"] == "reply_resent"
 
 
 def test_claims_endpoint_bootstraps_database(monkeypatch) -> None:

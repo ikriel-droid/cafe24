@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     cafe24_webhook_secret: str | None = None
     cafe24_scopes: Annotated[list[str], NoDecode] = []
     cafe24_api_timeout_seconds: int = 15
+    reply_delivery_mode: str = "manual_handoff"
+    reply_delivery_webhook_url: str | None = None
+    reply_delivery_webhook_token: str | None = None
+    reply_delivery_timeout_seconds: int = 10
+    reply_delivery_manual_channel_label: str = "Cafe24 Admin Manual Handoff"
     seed_demo_data: bool = True
 
     @field_validator("database_url", mode="before")
@@ -56,6 +61,8 @@ class Settings(BaseSettings):
         "cafe24_client_secret",
         "cafe24_redirect_uri",
         "cafe24_webhook_secret",
+        "reply_delivery_webhook_url",
+        "reply_delivery_webhook_token",
         mode="before",
     )
     @classmethod
@@ -64,6 +71,14 @@ class Settings(BaseSettings):
             return None
         normalized = value.strip()
         return normalized or None
+
+    @field_validator("reply_delivery_mode", mode="before")
+    @classmethod
+    def normalize_reply_delivery_mode(cls, value: str | None) -> str:
+        if value is None:
+            return "manual_handoff"
+        normalized = value.strip().lower()
+        return normalized or "manual_handoff"
 
     @field_validator("cors_origins", "cafe24_scopes", mode="before")
     @classmethod

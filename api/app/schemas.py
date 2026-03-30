@@ -36,6 +36,24 @@ class AuditLogRead(ORMModel):
     created_at: datetime
 
 
+class ReplyDeliveryRead(ORMModel):
+    id: int
+    actor: str
+    attempt_no: int
+    channel: str
+    status: str
+    provider: str
+    destination: str | None
+    reply_body: str
+    external_delivery_id: str | None
+    request_payload_json: dict[str, Any] | None
+    response_payload_json: dict[str, Any] | None
+    error_message: str | None
+    sent_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class ClaimAutomationRead(BaseModel):
     auto_triaged: bool
     auto_triaged_at: datetime | None
@@ -45,6 +63,13 @@ class ClaimAutomationRead(BaseModel):
     follow_up_needed: bool
     reply_sent_at: datetime | None
     reply_sent_by: str | None
+    latest_delivery_status: str | None
+    latest_delivery_channel: str | None
+    latest_delivery_at: datetime | None
+    latest_delivery_error: str | None
+    latest_delivery_destination: str | None
+    delivery_attempt_count: int
+    can_retry_delivery: bool
     classification_confidence: float | None
     draft_reply_confidence: float | None
     source_event: str | None
@@ -71,6 +96,7 @@ class ClaimDetail(ClaimListItem):
     messages: list[ClaimMessageRead]
     suggested_actions: list[SuggestedActionRead]
     audit_logs: list[AuditLogRead]
+    reply_deliveries: list[ReplyDeliveryRead]
 
 
 class ClaimStatusUpdate(BaseModel):
@@ -85,6 +111,11 @@ class ClaimNoteCreate(BaseModel):
 
 class ClaimReplySend(BaseModel):
     reply_body: str | None = Field(default=None, max_length=4000)
+    actor: str = Field(default="merchant_operator")
+    mark_done: bool = Field(default=True)
+
+
+class ClaimReplyRetry(BaseModel):
     actor: str = Field(default="merchant_operator")
     mark_done: bool = Field(default=True)
 

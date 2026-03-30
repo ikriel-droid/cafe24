@@ -18,9 +18,13 @@ from app.models import (
     ClaimUrgency,
     Merchant,
     Policy,
+    ReplyDelivery,
+    ReplyDeliveryStatus,
     SuggestedAction,
 )
-from app.schemas import ClaimNoteCreate, ClaimReplySend, DashboardSummary, PolicyUpdate
+from app.reply_delivery.base import ReplyDeliveryError, ReplyDeliveryRequest
+from app.reply_delivery.factory import get_reply_delivery_provider
+from app.schemas import ClaimNoteCreate, ClaimReplyRetry, ClaimReplySend, DashboardSummary, PolicyUpdate
 
 
 MOCK_WEBHOOK_RULES: dict[str, dict[str, object]] = {
@@ -99,6 +103,7 @@ def list_claims(
         .options(
             selectinload(Claim.suggested_actions),
             selectinload(Claim.audit_logs),
+            selectinload(Claim.reply_deliveries),
         )
         .order_by(Claim.created_at.desc())
     )
@@ -154,6 +159,7 @@ def get_claim(session: Session, claim_id: int) -> Claim:
             selectinload(Claim.messages),
             selectinload(Claim.suggested_actions),
             selectinload(Claim.audit_logs),
+            selectinload(Claim.reply_deliveries),
         )
     )
     claim = session.scalar(query)
@@ -180,7 +186,11 @@ def build_claim_automation_summary(claim: Claim) -> dict[str, object]:
         (action for action in claim.suggested_actions if action.action_type == "draft_reply"),
         None,
     )
-    latest_reply_sent_log = next((log for log in claim.audit_logs if log.event_type == "reply_sent"), None)
+    latest_delivery = claim.reply_deliveries[0] if claim.reply_deliveries else None
+    latest_successful_delivery = next(
+        (delivery for delivery in claim.reply_deliveries if delivery.status == ReplyDeliveryStatus.SENT),
+        None,
+    )
     payload = auto_triage_log.payload_json if auto_triage_log else None
 
     classification_confidence = None
@@ -197,7 +207,7 @@ def build_claim_automation_summary(claim: Claim) -> dict[str, object]:
         if isinstance(source_value, str):
             source_event = source_value
 
-    follow_up_needed = latest_reply_sent_log is not None and claim.status != ClaimStatus.DONE
+    follow_up_needed = latest_successful_delivery is not None and claim.status != ClaimStatus.DONE
     draft_reply_preview = None
     if latest_reply is not None:
         normalized_reply = latest_reply.draft_reply.strip().replace("\r\n", "\n").replace("\n", " ")
@@ -211,10 +221,17 @@ def build_claim_automation_summary(claim: Claim) -> dict[str, object]:
         "auto_triaged_at": auto_triage_log.created_at if auto_triage_log else None,
         "reply_ready": latest_reply is not None and bool(latest_reply.draft_reply.strip()),
         "draft_reply_preview": draft_reply_preview,
-        "reply_sent": latest_reply_sent_log is not None,
+        "reply_sent": latest_successful_delivery is not None,
         "follow_up_needed": follow_up_needed,
-        "reply_sent_at": latest_reply_sent_log.created_at if latest_reply_sent_log else None,
-        "reply_sent_by": latest_reply_sent_log.actor if latest_reply_sent_log else None,
+        "reply_sent_at": latest_successful_delivery.sent_at if latest_successful_delivery else None,
+        "reply_sent_by": latest_successful_delivery.actor if latest_successful_delivery else None,
+        "latest_delivery_status": latest_delivery.status.value if latest_delivery else None,
+        "latest_delivery_channel": latest_delivery.channel.value if latest_delivery else None,
+        "latest_delivery_at": (latest_delivery.sent_at or latest_delivery.created_at) if latest_delivery else None,
+        "latest_delivery_error": latest_delivery.error_message if latest_delivery else None,
+        "latest_delivery_destination": latest_delivery.destination if latest_delivery else None,
+        "delivery_attempt_count": len(claim.reply_deliveries),
+        "can_retry_delivery": latest_delivery is not None and latest_delivery.status == ReplyDeliveryStatus.FAILED,
         "classification_confidence": classification_confidence,
         "draft_reply_confidence": draft_reply_confidence,
         "source_event": source_event,
@@ -236,6 +253,47 @@ def record_audit_log(
             payload_json=payload_json,
         )
     )
+
+
+def get_next_reply_delivery_attempt_no(claim: Claim) -> int:
+    latest_attempt_no = claim.reply_deliveries[0].attempt_no if claim.reply_deliveries else 0
+    return latest_attempt_no + 1
+
+
+def record_reply_delivery(
+    session: Session,
+    claim: Claim,
+    *,
+    actor: str,
+    attempt_no: int,
+    channel,
+    status,
+    provider: str,
+    reply_body: str,
+    destination: str | None,
+    external_delivery_id: str | None = None,
+    request_payload_json: dict[str, object] | None = None,
+    response_payload_json: dict[str, object] | None = None,
+    error_message: str | None = None,
+    sent_at=None,
+) -> ReplyDelivery:
+    delivery = ReplyDelivery(
+        claim_id=claim.id,
+        actor=actor,
+        attempt_no=attempt_no,
+        channel=channel,
+        status=status,
+        provider=provider,
+        destination=destination,
+        reply_body=reply_body,
+        external_delivery_id=external_delivery_id,
+        request_payload_json=request_payload_json,
+        response_payload_json=response_payload_json,
+        error_message=error_message,
+        sent_at=sent_at,
+    )
+    session.add(delivery)
+    return delivery
 
 
 def update_claim_status(session: Session, claim_id: int, status_value: ClaimStatus, actor: str) -> Claim:
@@ -285,6 +343,65 @@ def send_claim_reply(session: Session, claim_id: int, payload: ClaimReplySend) -
     if not reply_body:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Reply body cannot be empty.")
 
+    attempt_no = get_next_reply_delivery_attempt_no(claim)
+    provider = get_reply_delivery_provider()
+
+    try:
+        delivery_result = provider.send_reply(
+            ReplyDeliveryRequest(
+                claim=claim,
+                actor=payload.actor,
+                reply_body=reply_body,
+                attempt_no=attempt_no,
+            )
+        )
+    except ReplyDeliveryError as exc:
+        record_reply_delivery(
+            session,
+            claim,
+            actor=payload.actor,
+            attempt_no=attempt_no,
+            channel=exc.channel,
+            status=ReplyDeliveryStatus.FAILED,
+            provider=exc.provider,
+            reply_body=reply_body,
+            destination=exc.destination,
+            request_payload_json=exc.request_payload,
+            response_payload_json=exc.response_payload,
+            error_message=str(exc),
+        )
+        record_audit_log(
+            session,
+            claim_id=claim.id,
+            actor=payload.actor,
+            event_type="reply_delivery_failed",
+            payload_json={
+                "attempt_no": attempt_no,
+                "channel": exc.channel.value,
+                "provider": exc.provider,
+                "destination": exc.destination,
+                "error": str(exc),
+            },
+        )
+        session.commit()
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+    record_reply_delivery(
+        session,
+        claim,
+        actor=payload.actor,
+        attempt_no=attempt_no,
+        channel=delivery_result.channel,
+        status=delivery_result.status,
+        provider=delivery_result.provider,
+        reply_body=reply_body,
+        destination=delivery_result.destination,
+        external_delivery_id=delivery_result.external_delivery_id,
+        request_payload_json=delivery_result.request_payload,
+        response_payload_json=delivery_result.response_payload,
+        sent_at=delivery_result.sent_at,
+    )
+
     session.add(
         ClaimMessage(
             claim_id=claim.id,
@@ -301,8 +418,13 @@ def send_claim_reply(session: Session, claim_id: int, payload: ClaimReplySend) -
         session,
         claim_id=claim.id,
         actor=payload.actor,
-        event_type="reply_sent",
+        event_type="reply_resent" if attempt_no > 1 else "reply_sent",
         payload_json={
+            "attempt_no": attempt_no,
+            "channel": delivery_result.channel.value,
+            "provider": delivery_result.provider,
+            "destination": delivery_result.destination,
+            "external_delivery_id": delivery_result.external_delivery_id,
             "mark_done": payload.mark_done,
             "status": claim.status.value,
             "source": "manual_edit" if payload.reply_body else "latest_draft",
@@ -312,6 +434,29 @@ def send_claim_reply(session: Session, claim_id: int, payload: ClaimReplySend) -
     session.commit()
     session.expire_all()
     return get_claim(session, claim_id)
+
+
+def retry_failed_claim_reply(session: Session, claim_id: int, payload: ClaimReplyRetry) -> Claim:
+    claim = get_claim(session, claim_id)
+    failed_delivery = next(
+        (delivery for delivery in claim.reply_deliveries if delivery.status == ReplyDeliveryStatus.FAILED),
+        None,
+    )
+    if failed_delivery is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No failed reply delivery attempt is available for retry.",
+        )
+
+    return send_claim_reply(
+        session,
+        claim_id,
+        ClaimReplySend(
+            reply_body=failed_delivery.reply_body,
+            actor=payload.actor,
+            mark_done=payload.mark_done,
+        ),
+    )
 
 
 def classify_claim(session: Session, claim_id: int) -> ClassificationResult:

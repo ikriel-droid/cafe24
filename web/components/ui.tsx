@@ -60,6 +60,32 @@ export function formatAutomationSourceEvent(value: string | null | undefined) {
   return value.replace(/[._]/g, " ");
 }
 
+export function formatReplyDeliveryChannel(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const channelLabels: Record<string, string> = {
+    manual_handoff: "수동 전달",
+    webhook: "Webhook 발송",
+  };
+
+  return channelLabels[value] ?? value.replace(/_/g, " ");
+}
+
+export function formatReplyDeliveryStatus(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const statusLabels: Record<string, string> = {
+    sent: "발송 성공",
+    failed: "발송 실패",
+  };
+
+  return statusLabels[value] ?? value.replace(/_/g, " ");
+}
+
 export function Badge({
   children,
   tone = "neutral",

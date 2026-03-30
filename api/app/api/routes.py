@@ -31,6 +31,7 @@ from app.schemas import (
     ClaimDetail,
     ClaimListItem,
     ClaimNoteCreate,
+    ClaimReplyRetry,
     ClaimReplySend,
     ClaimStatusUpdate,
     ClassificationResponse,
@@ -51,6 +52,7 @@ from app.services.claim_service import (
     get_dashboard_summary,
     get_policy,
     list_claims,
+    retry_failed_claim_reply,
     send_claim_reply,
     update_claim_status,
     update_policy,
@@ -92,6 +94,7 @@ def build_claim_detail_payload(claim: Claim) -> dict[str, object]:
         "messages": claim.messages,
         "suggested_actions": claim.suggested_actions,
         "audit_logs": claim.audit_logs,
+        "reply_deliveries": claim.reply_deliveries,
     }
 
 
@@ -178,6 +181,16 @@ def claims_send_reply(
     db: Session = Depends(get_db),
 ) -> ClaimDetail:
     claim = send_claim_reply(db, claim_id, payload)
+    return ClaimDetail.model_validate(build_claim_detail_payload(claim))
+
+
+@router.post("/claims/{claim_id}/retry-reply-delivery", response_model=ClaimDetail)
+def claims_retry_reply_delivery(
+    claim_id: int,
+    payload: ClaimReplyRetry,
+    db: Session = Depends(get_db),
+) -> ClaimDetail:
+    claim = retry_failed_claim_reply(db, claim_id, payload)
     return ClaimDetail.model_validate(build_claim_detail_payload(claim))
 
 

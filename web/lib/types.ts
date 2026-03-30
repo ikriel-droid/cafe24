@@ -35,6 +35,24 @@ export interface AuditLog {
   created_at: string;
 }
 
+export interface ReplyDelivery {
+  id: number;
+  actor: string;
+  attempt_no: number;
+  channel: string;
+  status: string;
+  provider: string;
+  destination: string | null;
+  reply_body: string;
+  external_delivery_id: string | null;
+  request_payload_json: Record<string, unknown> | null;
+  response_payload_json: Record<string, unknown> | null;
+  error_message: string | null;
+  sent_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ClaimAutomation {
   auto_triaged: boolean;
   auto_triaged_at: string | null;
@@ -44,6 +62,13 @@ export interface ClaimAutomation {
   follow_up_needed: boolean;
   reply_sent_at: string | null;
   reply_sent_by: string | null;
+  latest_delivery_status: string | null;
+  latest_delivery_channel: string | null;
+  latest_delivery_at: string | null;
+  latest_delivery_error: string | null;
+  latest_delivery_destination: string | null;
+  delivery_attempt_count: number;
+  can_retry_delivery: boolean;
   classification_confidence: number | null;
   draft_reply_confidence: number | null;
   source_event: string | null;
@@ -67,6 +92,7 @@ export interface Claim {
   messages?: ClaimMessage[];
   suggested_actions?: SuggestedAction[];
   audit_logs?: AuditLog[];
+  reply_deliveries?: ReplyDelivery[];
 }
 
 export interface Policy {

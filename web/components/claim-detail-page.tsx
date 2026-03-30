@@ -4,7 +4,16 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { Claim, ClaimStatus, ClassificationResponse, DraftReplyResponse, SuggestedAction } from "@/lib/types";
-import { Badge, categoryLabels, formatAutomationSourceEvent, formatDate, statusLabels, urgencyLabels } from "@/components/ui";
+import {
+  Badge,
+  categoryLabels,
+  formatAutomationSourceEvent,
+  formatDate,
+  formatReplyDeliveryChannel,
+  formatReplyDeliveryStatus,
+  statusLabels,
+  urgencyLabels,
+} from "@/components/ui";
 
 function findLatestSuggestion(actions: SuggestedAction[] | undefined, actionType: string) {
   return actions?.find((action) => action.action_type === actionType) ?? null;
@@ -49,6 +58,12 @@ function toneForUrgency(urgency: Claim["urgency"]) {
   if (urgency === "high") return "danger";
   if (urgency === "medium") return "accent";
   return "teal";
+}
+
+function toneForDeliveryStatus(status: string | null | undefined) {
+  if (status === "failed") return "danger";
+  if (status === "sent") return "teal";
+  return "neutral";
 }
 
 export function ClaimDetailPage({ claimId }: { claimId: string }) {
@@ -179,6 +194,27 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
     } catch (actionError) {
       setNotice(null);
       setError(actionError instanceof Error ? actionError.message : "답변 발송 처리에 실패했습니다.");
+    } finally {
+      setWorkingAction(null);
+    }
+  }
+
+  async function handleRetryFailedDelivery() {
+    setWorkingAction("retry-delivery");
+
+    try {
+      const data = await apiFetch<Claim>(`/api/claims/${claimId}/retry-reply-delivery`, {
+        method: "POST",
+        body: JSON.stringify({ actor: "web_operator", mark_done: closeAfterSend }),
+      });
+
+      setClaim(data);
+      setError(null);
+      setNotice("실패한 발송을 다시 시도했습니다.");
+    } catch (actionError) {
+      await loadClaim();
+      setNotice(null);
+      setError(actionError instanceof Error ? actionError.message : "발송 재시도에 실패했습니다.");
     } finally {
       setWorkingAction(null);
     }
@@ -442,6 +478,16 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
               <strong>{isReplyEdited ? "수정됨" : "AI 초안"}</strong>
             </div>
           </div>
+          <div className="summary-list">
+            <div className="summary-row">
+              <span className="muted">발송 채널</span>
+              <strong>{formatReplyDeliveryChannel(claim.automation.latest_delivery_channel) ?? "미정"}</strong>
+            </div>
+            <div className="summary-row">
+              <span className="muted">최근 발송 결과</span>
+              <strong>{formatReplyDeliveryStatus(claim.automation.latest_delivery_status) ?? "없음"}</strong>
+            </div>
+          </div>
           <textarea
             className="textarea reply-editor"
             value={replyDraft}
@@ -464,6 +510,11 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
             <button className="button" onClick={handleSendReply} disabled={!replyDraft.trim() || !!workingAction}>
               {claim.automation.reply_sent ? "Resend Reply" : closeAfterSend ? "Send Reply + Done" : "Send Reply"}
             </button>
+            {claim.automation.can_retry_delivery ? (
+              <button className="button secondary" onClick={handleRetryFailedDelivery} disabled={!!workingAction}>
+                Retry Failed Delivery
+              </button>
+            ) : null}
             <button className="button ghost" onClick={handleCopyReply} disabled={!replyDraft.trim() || !!workingAction}>
               Copy Reply
             </button>
@@ -494,6 +545,36 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
             Save Internal Note
           </button>
         </div>
+      </section>
+
+      <section className="card stack">
+        <div>
+          <h3>발송 이력</h3>
+          <p>각 발송 시도의 채널, 결과, 오류를 확인합니다.</p>
+        </div>
+        {claim.reply_deliveries && claim.reply_deliveries.length > 0 ? (
+          <div className="timeline">
+            {claim.reply_deliveries.map((delivery) => (
+              <div key={delivery.id} className="timeline-item">
+                <div className="actions">
+                  <strong>
+                    Attempt {delivery.attempt_no} / {formatReplyDeliveryChannel(delivery.channel) ?? delivery.channel}
+                  </strong>
+                  <Badge tone={toneForDeliveryStatus(delivery.status)}>
+                    {formatReplyDeliveryStatus(delivery.status) ?? delivery.status}
+                  </Badge>
+                </div>
+                <p className="timeline-meta">
+                  {delivery.destination ?? "-"} / {delivery.actor} / {delivery.sent_at ? formatDate(delivery.sent_at) : "-"}
+                </p>
+                {delivery.error_message ? <p>{delivery.error_message}</p> : null}
+                {delivery.external_delivery_id ? <p className="timeline-meta">Delivery ID: {delivery.external_delivery_id}</p> : null}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state inline-state">아직 발송 이력이 없습니다.</div>
+        )}
       </section>
 
       <section className="card stack">
