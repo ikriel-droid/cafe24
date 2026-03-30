@@ -1,11 +1,11 @@
 # ClaimMate AI Product Checklist
 
-이 문서는 `로컬 MVP` 이후 `실서비스 수준`까지 가기 위한 남은 작업 체크리스트입니다.
+로컬 MVP 이후 실제 서비스 수준까지 가기 위한 작업 체크리스트입니다.
 
-운영 원칙:
-- 아직 안 한 일은 `[ ]`
-- 끝난 일은 `[x]`
-- 작업을 마칠 때마다 이 파일을 바로 갱신
+운영 규칙:
+- 아직 안 끝난 항목은 `[ ]`
+- 끝난 항목은 `[x]`
+- 작업이 끝날 때마다 이 파일을 바로 갱신
 
 ## 0. Current Baseline
 
@@ -17,12 +17,12 @@
 
 ## 1. Live Cafe24 Integration
 
-- [ ] Cafe24 실제 OAuth authorize / callback / token exchange 구현
-- [ ] Cafe24 access token 저장 및 갱신 처리
+- [x] Cafe24 실제 OAuth authorize / callback / token exchange 구현
+- [x] Cafe24 access token 저장 및 갱신 처리
 - [ ] Cafe24 주문 / 배송 / 클레임 실제 sync 구현
-- [ ] Cafe24 webhook 실제 엔드포인트 연결
-- [ ] webhook 서명 검증 및 위변조 방지
-- [ ] webhook 중복 수신 방지 키 처리
+- [x] Cafe24 webhook 실제 엔드포인트 연결
+- [x] webhook 서명 검증 및 위변조 방지
+- [x] webhook 중복 수신 방지 키 처리
 - [ ] webhook 실패 재시도 정책 정리
 - [ ] mock integration 상태를 실제 integration 상태 모델로 치환
 
@@ -39,10 +39,10 @@
 
 - [ ] 운영자 로그인 구현
 - [ ] merchant 단위 데이터 격리
-- [ ] 권한 역할 구분
+- [ ] 권한 / 역할 구분
 - [ ] API 인증 / 세션 처리
 - [ ] merchant별 정책 / 연동 설정 분리
-- [ ] 감사 로그 접근 권한 제한
+- [ ] 감사 로그 열람 권한 제한
 
 ## 4. Background Jobs And Reliability
 
@@ -50,7 +50,7 @@
 - [ ] sync 비동기 작업 분리
 - [ ] webhook 처리 비동기화
 - [ ] job retry / dead-letter 정책 추가
-- [ ] 장시간 작업 상태 추적
+- [ ] 실시간 작업 상태 추적
 - [ ] 운영자 재실행 버튼과 job 상태 연결
 
 ## 5. Database And Data Lifecycle
@@ -70,14 +70,14 @@
 - [ ] AI 실패 시 deterministic fallback 정책 유지
 - [ ] 모델 비용 / 토큰 사용량 기록
 - [ ] 답변 품질 평가 기준 정리
-- [ ] human review 기준선 명확화
+- [ ] human review 기준 명확화
 
 ## 7. Operations UX
 
 - [ ] 대시보드 KPI 최종 정의
 - [ ] 운영자 메모 / 인수인계 UX 보강
 - [ ] 감사 로그 검색 / 필터 추가
-- [ ] 클레임 히스토리 diff 보기
+- [ ] 클레임 이력 diff 보기
 - [ ] bulk action 지원 여부 결정
 - [ ] SLA / 긴급도 기준 정리
 
@@ -104,6 +104,6 @@
 - [ ] merchant onboarding 플로우
 - [ ] 설치 가이드 / 운영 가이드 문서화
 - [ ] 과금 기준 정의
-- [ ] 사용량 측정 포인트 설계
+- [ ] 사용량 측정 방식 설계
 - [ ] 개인정보 처리 / 보관 정책 검토
 - [ ] 베타 고객 검증 시나리오 확정

@@ -1,17 +1,29 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+import json
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from urllib.parse import urlencode
 
 from app.db.session import get_db
+from app.integrations.cafe24.live_service import (
+    build_live_status,
+    connect_with_code,
+    ingest_live_webhook,
+    refresh_connection_token,
+    resolve_webhook_merchant,
+)
 from app.integrations.cafe24.oauth_client import Cafe24OAuthClient
 from app.integrations.cafe24.sync_service import Cafe24SyncService
+from app.integrations.cafe24.webhooks import Cafe24WebhookHandler
 from app.models import Claim, ClaimCategory, ClaimStatus
 from app.schemas import (
     Cafe24IntegrationStatus,
     Cafe24MockWebhookRequest,
+    Cafe24TokenRefreshResponse,
+    Cafe24WebhookIngestResponse,
     ClaimDetail,
     ClaimListItem,
     ClaimNoteCreate,
@@ -85,8 +97,14 @@ def build_cafe24_service(settings) -> Cafe24SyncService:
             client_id=settings.cafe24_client_id or "",
             client_secret=settings.cafe24_client_secret or "",
             redirect_uri=settings.cafe24_redirect_uri or "",
+            scopes=settings.cafe24_scopes,
+            timeout_seconds=settings.cafe24_api_timeout_seconds,
         )
     )
+
+
+def build_cafe24_webhook_handler(settings) -> Cafe24WebhookHandler:
+    return Cafe24WebhookHandler(signing_secret=settings.cafe24_webhook_secret or "")
 
 
 def resolve_merchant_id_from_state(state: str | None, fallback_merchant_id: int) -> int:
@@ -203,6 +221,9 @@ def cafe24_status(merchant_id: int | None = None, db: Session = Depends(get_db))
     merchant = get_default_merchant(db, merchant_id)
     claims = list_claims(db, merchant_id=merchant.id)
     service = build_cafe24_service(settings)
+    live_status = build_live_status(db, merchant, claims, settings, service.oauth_client)
+    if live_status is not None:
+        return Cafe24IntegrationStatus.model_validate(live_status)
     return Cafe24IntegrationStatus.model_validate(service.get_status(merchant, claims, settings))
 
 
@@ -272,16 +293,25 @@ def cafe24_callback(
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
+    db: Session = Depends(get_db),
 ) -> RedirectResponse:
     settings = get_settings()
     params: dict[str, str] = {}
+    service = build_cafe24_service(settings)
+    merchant_id = resolve_merchant_id_from_state(state, settings.default_merchant_id)
 
     if error:
         params["oauth_result"] = "error"
         params["oauth_message"] = f"Cafe24 returned an OAuth error: {error}"
     elif code:
-        params["oauth_result"] = "received"
-        params["oauth_message"] = "Cafe24 OAuth callback placeholder received a code. Live token exchange is not enabled."
+        merchant = get_default_merchant(db, merchant_id)
+        try:
+            connect_with_code(db, merchant, service.oauth_client, settings, code)
+            params["oauth_result"] = "connected"
+            params["oauth_message"] = "Cafe24 OAuth token exchange completed and the connection was saved."
+        except Exception as exc:
+            params["oauth_result"] = "error"
+            params["oauth_message"] = f"Cafe24 OAuth token exchange failed: {exc}"
     else:
         params["oauth_result"] = "missing_code"
         params["oauth_message"] = "Cafe24 OAuth callback reached the local MVP, but no code parameter was provided."
@@ -289,9 +319,8 @@ def cafe24_callback(
     if state:
         params["oauth_state"] = state
 
-    service = build_cafe24_service(settings)
     service.record_oauth_callback(
-        merchant_id=resolve_merchant_id_from_state(state, settings.default_merchant_id),
+        merchant_id=merchant_id,
         result=params["oauth_result"],
         message=params["oauth_message"],
         state=state,
@@ -299,6 +328,68 @@ def cafe24_callback(
 
     destination = f"/integrations/cafe24/?{urlencode(params)}"
     return RedirectResponse(url=destination, status_code=307)
+
+
+@router.post("/integrations/cafe24/refresh-token", response_model=Cafe24TokenRefreshResponse)
+def cafe24_refresh_token(
+    merchant_id: int | None = None,
+    db: Session = Depends(get_db),
+) -> Cafe24TokenRefreshResponse:
+    settings = get_settings()
+    merchant = get_default_merchant(db, merchant_id)
+    service = build_cafe24_service(settings)
+    connection = refresh_connection_token(db, merchant, service.oauth_client, settings)
+    return Cafe24TokenRefreshResponse(
+        status="refreshed",
+        refreshed_at=connection.last_token_refreshed_at or connection.updated_at,
+        access_token_expires_at=connection.access_token_expires_at,
+    )
+
+
+@router.post("/integrations/cafe24/webhook/live", response_model=Cafe24WebhookIngestResponse, status_code=202)
+async def cafe24_live_webhook(
+    request: Request,
+    merchant_id: int | None = None,
+    db: Session = Depends(get_db),
+) -> Cafe24WebhookIngestResponse:
+    raw_body = await request.body()
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cafe24 webhook payload must be valid JSON.",
+        ) from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cafe24 webhook payload must be a JSON object.",
+        )
+
+    settings = get_settings()
+    headers = {key.lower(): value for key, value in request.headers.items()}
+    merchant = resolve_webhook_merchant(
+        db,
+        explicit_merchant_id=merchant_id,
+        payload=payload,
+        headers=headers,
+    )
+    handler = build_cafe24_webhook_handler(settings)
+    delivery, duplicate = ingest_live_webhook(
+        db,
+        merchant,
+        handler,
+        headers=headers,
+        body=raw_body,
+        payload=payload,
+    )
+    return Cafe24WebhookIngestResponse(
+        status="duplicate" if duplicate else delivery.status,
+        duplicate=duplicate,
+        dedupe_key=delivery.dedupe_key,
+        event_type=delivery.event_type,
+        merchant_id=merchant.id,
+    )
 
 
 @router.get("/dashboard/summary", response_model=DashboardSummary)

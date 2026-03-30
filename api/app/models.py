@@ -47,6 +47,8 @@ class Merchant(Base):
 
     policy: Mapped["Policy | None"] = relationship(back_populates="merchant", uselist=False)
     claims: Mapped[list["Claim"]] = relationship(back_populates="merchant")
+    cafe24_connection: Mapped["Cafe24Connection | None"] = relationship(back_populates="merchant", uselist=False)
+    cafe24_webhook_deliveries: Mapped[list["Cafe24WebhookDelivery"]] = relationship(back_populates="merchant")
 
 
 class Policy(Base):
@@ -157,3 +159,60 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     claim: Mapped["Claim"] = relationship(back_populates="audit_logs")
+
+
+class Cafe24Connection(Base):
+    __tablename__ = "cafe24_connections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    merchant_id: Mapped[int] = mapped_column(ForeignKey("merchants.id"), nullable=False, unique=True, index=True)
+    mall_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    token_type: Mapped[str] = mapped_column(String(32), nullable=False, default="Bearer")
+    scopes_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    access_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    refresh_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_token_refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_sync_result: Mapped[str] = mapped_column(String(64), nullable=False, default="not_started")
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_sync_batch_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    synced_orders: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    synced_claims: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    merchant: Mapped["Merchant"] = relationship(back_populates="cafe24_connection")
+    webhook_deliveries: Mapped[list["Cafe24WebhookDelivery"]] = relationship(back_populates="connection")
+
+
+class Cafe24WebhookDelivery(Base):
+    __tablename__ = "cafe24_webhook_deliveries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    merchant_id: Mapped[int] = mapped_column(ForeignKey("merchants.id"), nullable=False, index=True)
+    connection_id: Mapped[int | None] = mapped_column(ForeignKey("cafe24_connections.id"), nullable=True, index=True)
+    dedupe_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    external_event_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    signature: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="received", index=True)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    merchant: Mapped["Merchant"] = relationship(back_populates="cafe24_webhook_deliveries")
+    connection: Mapped["Cafe24Connection | None"] = relationship(back_populates="webhook_deliveries")

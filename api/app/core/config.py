@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     cafe24_client_id: str | None = None
     cafe24_client_secret: str | None = None
     cafe24_redirect_uri: str | None = None
+    cafe24_webhook_secret: str | None = None
+    cafe24_scopes: Annotated[list[str], NoDecode] = []
+    cafe24_api_timeout_seconds: int = 15
     seed_demo_data: bool = True
 
     @field_validator("database_url", mode="before")
@@ -48,7 +51,13 @@ class Settings(BaseSettings):
         normalized = value.strip()
         return normalized or None
 
-    @field_validator("cafe24_client_id", "cafe24_client_secret", "cafe24_redirect_uri", mode="before")
+    @field_validator(
+        "cafe24_client_id",
+        "cafe24_client_secret",
+        "cafe24_redirect_uri",
+        "cafe24_webhook_secret",
+        mode="before",
+    )
     @classmethod
     def normalize_optional_strings(cls, value: str | None) -> str | None:
         if value is None:
@@ -56,9 +65,9 @@ class Settings(BaseSettings):
         normalized = value.strip()
         return normalized or None
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", "cafe24_scopes", mode="before")
     @classmethod
-    def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
+    def parse_csv_list(cls, value: str | list[str]) -> list[str]:
         if isinstance(value, list):
             return value
         if not value:

@@ -132,6 +132,20 @@ class Cafe24MockWebhookRequest(BaseModel):
     order_no: str | None = Field(default=None, max_length=100)
 
 
+class Cafe24TokenRefreshResponse(BaseModel):
+    status: str
+    refreshed_at: datetime
+    access_token_expires_at: datetime | None
+
+
+class Cafe24WebhookIngestResponse(BaseModel):
+    status: str
+    duplicate: bool
+    dedupe_key: str
+    event_type: str
+    merchant_id: int
+
+
 class Cafe24ActivityEvent(BaseModel):
     occurred_at: datetime
     event_type: str
@@ -157,6 +171,11 @@ class Cafe24IntegrationStatus(BaseModel):
     oauth_configured: bool
     webhook_endpoint_ready: bool
     authorize_url: str | None
+    mall_id: str | None = None
+    access_token_expires_at: datetime | None = None
+    refresh_token_expires_at: datetime | None = None
+    last_token_refreshed_at: datetime | None = None
+    webhook_secret_configured: bool = False
     last_sync_result: str
     last_synced_at: datetime | None
     last_sync_batch_id: str | None
