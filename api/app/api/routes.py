@@ -97,6 +97,31 @@ def build_claim_base_payload(claim: Claim) -> dict[str, object]:
     }
 
 
+def build_ai_meta_payload(metadata) -> dict[str, object]:
+    return {
+        "provider_name": metadata.provider_name,
+        "requested_provider_name": metadata.requested_provider_name,
+        "model_name": metadata.model_name,
+        "prompt_key": metadata.prompt_key,
+        "prompt_version": metadata.prompt_version,
+        "fallback_used": metadata.fallback_used,
+        "fallback_reason": metadata.fallback_reason,
+        "review_required": metadata.review_required,
+        "review_reasons": list(metadata.review_reasons),
+        "evaluation_summary": metadata.evaluation_summary,
+        "evaluation_checks": [
+            {"name": check.name, "passed": check.passed, "detail": check.detail}
+            for check in metadata.evaluation_checks
+        ],
+        "usage": {
+            "input_tokens": metadata.usage.input_tokens,
+            "output_tokens": metadata.usage.output_tokens,
+            "total_tokens": metadata.usage.total_tokens,
+            "estimated_cost_usd": metadata.usage.estimated_cost_usd,
+        },
+    }
+
+
 def build_claim_detail_payload(claim: Claim, *, include_audit_logs: bool = True) -> dict[str, object]:
     return {
         **build_claim_base_payload(claim),
@@ -106,6 +131,7 @@ def build_claim_detail_payload(claim: Claim, *, include_audit_logs: bool = True)
         "suggested_actions": claim.suggested_actions,
         "audit_logs": claim.audit_logs if include_audit_logs else [],
         "reply_deliveries": claim.reply_deliveries,
+        "ai_invocations": claim.ai_invocations,
     }
 
 
@@ -339,6 +365,7 @@ def claims_classify(
         urgency=result.urgency,
         confidence=result.confidence,
         rationale=result.rationale,
+        meta=build_ai_meta_payload(result.metadata),
     )
 
 
@@ -354,6 +381,7 @@ def claims_draft_reply(
         draft_reply=result.draft_reply,
         confidence=result.confidence,
         rationale=result.rationale,
+        meta=build_ai_meta_payload(result.metadata),
     )
 
 

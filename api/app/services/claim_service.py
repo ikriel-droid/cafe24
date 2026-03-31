@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 from collections import Counter
+from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.ai.base import ClassificationResult, DraftReplyResult
+from app.ai.base import AIResultMetadata, ClassificationResult, DraftReplyResult
 from app.ai.factory import get_ai_provider
+from app.ai.review_policy import apply_classification_review_policy, apply_draft_review_policy
 from app.core.config import get_settings
 from app.models import (
+    AIInvocationLog,
     AuditLog,
     Claim,
     ClaimCategory,
@@ -55,6 +58,95 @@ MOCK_WEBHOOK_RULES: dict[str, dict[str, object]] = {
         "message": "Cafe24 mock webhook으로 배송 지연 이슈가 접수되었습니다.",
     },
 }
+
+
+def _serialize_ai_metadata(metadata: AIResultMetadata) -> dict[str, object]:
+    return {
+        "provider_name": metadata.provider_name,
+        "requested_provider_name": metadata.requested_provider_name,
+        "model_name": metadata.model_name,
+        "prompt_key": metadata.prompt_key,
+        "prompt_version": metadata.prompt_version,
+        "fallback_used": metadata.fallback_used,
+        "fallback_reason": metadata.fallback_reason,
+        "review_required": metadata.review_required,
+        "review_reasons": list(metadata.review_reasons),
+        "evaluation_summary": metadata.evaluation_summary,
+        "evaluation_checks": [
+            {"name": check.name, "passed": check.passed, "detail": check.detail}
+            for check in metadata.evaluation_checks
+        ],
+        "usage": {
+            "input_tokens": metadata.usage.input_tokens,
+            "output_tokens": metadata.usage.output_tokens,
+            "total_tokens": metadata.usage.total_tokens,
+            "estimated_cost_usd": metadata.usage.estimated_cost_usd,
+        },
+    }
+
+
+def _format_ai_rationale(base_rationale: str, metadata: AIResultMetadata) -> str:
+    review_part = (
+        f"review=required:{','.join(metadata.review_reasons)}"
+        if metadata.review_required
+        else "review=not_required"
+    )
+    fallback_part = (
+        f"fallback={metadata.fallback_reason}"
+        if metadata.fallback_used and metadata.fallback_reason
+        else "fallback=none"
+    )
+    usage_part = (
+        "usage="
+        f"{metadata.usage.input_tokens}/{metadata.usage.output_tokens}/{metadata.usage.total_tokens}"
+        f" tokens, cost=${metadata.usage.estimated_cost_usd:.6f}"
+    )
+    meta_parts = [
+        f"provider={metadata.provider_name}",
+        f"requested_provider={metadata.requested_provider_name}",
+        f"model={metadata.model_name}",
+        f"prompt={metadata.prompt_key}:{metadata.prompt_version}",
+        review_part,
+        fallback_part,
+        usage_part,
+        metadata.evaluation_summary,
+    ]
+    return f"{base_rationale} [{' | '.join(meta_parts)}]"
+
+
+def _record_ai_invocation(
+    session: Session,
+    *,
+    claim_id: int,
+    action_type: str,
+    response_payload: dict[str, Any],
+    metadata: AIResultMetadata,
+) -> None:
+    session.add(
+        AIInvocationLog(
+            claim_id=claim_id,
+            action_type=action_type,
+            provider_name=metadata.provider_name,
+            requested_provider_name=metadata.requested_provider_name,
+            model_name=metadata.model_name,
+            prompt_key=metadata.prompt_key,
+            prompt_version=metadata.prompt_version,
+            fallback_used=metadata.fallback_used,
+            fallback_reason=metadata.fallback_reason,
+            review_required=metadata.review_required,
+            review_reasons_json=list(metadata.review_reasons),
+            evaluation_summary=metadata.evaluation_summary,
+            evaluation_checks_json=[
+                {"name": check.name, "passed": check.passed, "detail": check.detail}
+                for check in metadata.evaluation_checks
+            ],
+            input_tokens=metadata.usage.input_tokens,
+            output_tokens=metadata.usage.output_tokens,
+            total_tokens=metadata.usage.total_tokens,
+            estimated_cost_usd=metadata.usage.estimated_cost_usd,
+            response_json=response_payload,
+        )
+    )
 
 
 def get_default_merchant(
@@ -181,6 +273,7 @@ def get_claim(session: Session, claim_id: int, operator: OperatorUser | None = N
             selectinload(Claim.suggested_actions),
             selectinload(Claim.audit_logs),
             selectinload(Claim.reply_deliveries),
+            selectinload(Claim.ai_invocations),
         )
     )
     claim = session.scalar(query)
@@ -497,7 +590,7 @@ def retry_failed_claim_reply(
 def classify_claim(session: Session, claim_id: int, operator: OperatorUser | None = None) -> ClassificationResult:
     claim = get_claim(session, claim_id, operator)
     provider = get_ai_provider()
-    result = provider.classify_claim(claim, claim.messages)
+    result = apply_classification_review_policy(claim, provider.classify_claim(claim, claim.messages))
 
     claim.category = result.category
     claim.ai_label = result.label
@@ -509,19 +602,33 @@ def classify_claim(session: Session, claim_id: int, operator: OperatorUser | Non
             action_type="classification",
             draft_reply=f"category={result.category.value}; label={result.label}; urgency={result.urgency.value}",
             confidence=result.confidence,
-            rationale=result.rationale,
+            rationale=_format_ai_rationale(result.rationale, result.metadata),
         )
+    )
+    _record_ai_invocation(
+        session,
+        claim_id=claim.id,
+        action_type="classification",
+        response_payload={
+            "category": result.category.value,
+            "label": result.label,
+            "urgency": result.urgency.value,
+            "confidence": result.confidence,
+            "rationale": result.rationale,
+        },
+        metadata=result.metadata,
     )
     record_audit_log(
         session,
         claim_id=claim.id,
-        actor="ai_mock_or_placeholder",
+        actor=result.metadata.requested_provider_name,
         event_type="claim_classified",
         payload_json={
             "category": result.category.value,
             "label": result.label,
             "urgency": result.urgency.value,
             "confidence": result.confidence,
+            **_serialize_ai_metadata(result.metadata),
         },
     )
     session.commit()
@@ -532,7 +639,7 @@ def generate_draft_reply(session: Session, claim_id: int, operator: OperatorUser
     claim = get_claim(session, claim_id, operator)
     policy = get_policy(session, claim.merchant_id, operator)
     provider = get_ai_provider()
-    result = provider.draft_reply(claim, policy, claim.messages)
+    result = apply_draft_review_policy(claim, policy, provider.draft_reply(claim, policy, claim.messages))
 
     session.add(
         SuggestedAction(
@@ -540,15 +647,29 @@ def generate_draft_reply(session: Session, claim_id: int, operator: OperatorUser
             action_type="draft_reply",
             draft_reply=result.draft_reply,
             confidence=result.confidence,
-            rationale=result.rationale,
+            rationale=_format_ai_rationale(result.rationale, result.metadata),
         )
+    )
+    _record_ai_invocation(
+        session,
+        claim_id=claim.id,
+        action_type="draft_reply",
+        response_payload={
+            "draft_reply": result.draft_reply,
+            "confidence": result.confidence,
+            "rationale": result.rationale,
+        },
+        metadata=result.metadata,
     )
     record_audit_log(
         session,
         claim_id=claim.id,
-        actor="ai_mock_or_placeholder",
+        actor=result.metadata.requested_provider_name,
         event_type="draft_reply_generated",
-        payload_json={"confidence": result.confidence},
+        payload_json={
+            "confidence": result.confidence,
+            **_serialize_ai_metadata(result.metadata),
+        },
     )
     session.commit()
     return result

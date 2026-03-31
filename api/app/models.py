@@ -191,6 +191,11 @@ class Claim(Base):
         cascade="all, delete-orphan",
         order_by=lambda: (ReplyDelivery.created_at.desc(), ReplyDelivery.id.desc()),
     )
+    ai_invocations: Mapped[list["AIInvocationLog"]] = relationship(
+        back_populates="claim",
+        cascade="all, delete-orphan",
+        order_by=lambda: (AIInvocationLog.created_at.desc(), AIInvocationLog.id.desc()),
+    )
 
 
 class ClaimMessage(Base):
@@ -265,6 +270,33 @@ class ReplyDelivery(Base):
     )
 
     claim: Mapped["Claim"] = relationship(back_populates="reply_deliveries")
+
+
+class AIInvocationLog(Base):
+    __tablename__ = "ai_invocation_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    claim_id: Mapped[int] = mapped_column(ForeignKey("claims.id"), nullable=False, index=True)
+    action_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    provider_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    requested_provider_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    model_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    prompt_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    fallback_used: Mapped[bool] = mapped_column(nullable=False, default=False)
+    fallback_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    review_required: Mapped[bool] = mapped_column(nullable=False, default=False)
+    review_reasons_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    evaluation_summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    evaluation_checks_json: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    estimated_cost_usd: Mapped[float] = mapped_column(nullable=False, default=0.0)
+    response_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    claim: Mapped["Claim"] = relationship(back_populates="ai_invocations")
 
 
 class Cafe24Connection(Base):

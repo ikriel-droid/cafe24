@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     default_merchant_id: int = 1
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_timeout_seconds: int = 30
+    openai_input_cost_per_1m_tokens: float | None = None
+    openai_output_cost_per_1m_tokens: float | None = None
     session_secret_key: str = "claimmate-local-session-secret"
     session_cookie_name: str = "claimmate_session"
     session_max_age_seconds: int = 60 * 60 * 12
@@ -91,6 +95,14 @@ class Settings(BaseSettings):
         normalized = value.strip()
         return normalized or None
 
+    @field_validator("openai_base_url", mode="before")
+    @classmethod
+    def normalize_openai_base_url(cls, value: str | None) -> str:
+        if value is None:
+            return "https://api.openai.com/v1"
+        normalized = value.strip().rstrip("/")
+        return normalized or "https://api.openai.com/v1"
+
     @field_validator("reply_delivery_mode", mode="before")
     @classmethod
     def normalize_reply_delivery_mode(cls, value: str | None) -> str:
@@ -98,6 +110,18 @@ class Settings(BaseSettings):
             return "manual_handoff"
         normalized = value.strip().lower()
         return normalized or "manual_handoff"
+
+    @field_validator("openai_input_cost_per_1m_tokens", "openai_output_cost_per_1m_tokens", mode="before")
+    @classmethod
+    def normalize_optional_float(cls, value: str | float | None) -> float | None:
+        if value is None:
+            return None
+        if isinstance(value, float):
+            return value
+        normalized = value.strip()
+        if not normalized:
+            return None
+        return float(normalized)
 
     @field_validator("cors_origins", "cafe24_scopes", mode="before")
     @classmethod

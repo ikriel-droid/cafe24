@@ -10,10 +10,10 @@ import httpx
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
-from app.db.session import reset_engine
+from app.db.session import reset_engine, session_scope
 from app.integrations.cafe24.oauth_client import Cafe24OAuthTokens
 from app.integrations.cafe24.sync_service import Cafe24SyncService
-from app.models import Claim
+from app.models import AIInvocationLog, Claim
 
 
 def login_as(client: TestClient, email: str = "manager@alpha-seller.local", password: str = "demo1234") -> dict:
@@ -1044,4 +1044,88 @@ def test_claims_and_summary_support_automation_filters(monkeypatch) -> None:
         source_summary_payload = source_filtered_summary.json()
         assert source_summary_payload["total_claims"] == 1
         assert source_summary_payload["auto_triaged_claims"] == 1
+
+
+def test_ai_invocations_record_usage_review_and_fallback_metadata(monkeypatch) -> None:
+    temp_root = Path(".tmp") / "tests" / "ai-productionization"
+    if temp_root.exists():
+        shutil.rmtree(temp_root)
+    temp_root.mkdir(parents=True, exist_ok=True)
+
+    database_url = f"sqlite:///{temp_root.joinpath('claimmate-test.db').resolve().as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("SEED_DEMO_DATA", "true")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-5.4")
+    monkeypatch.setenv("OPENAI_INPUT_COST_PER_1M_TOKENS", "0.25")
+    monkeypatch.setenv("OPENAI_OUTPUT_COST_PER_1M_TOKENS", "2.0")
+    get_settings.cache_clear()
+    reset_engine()
+
+    call_count = {"value": 0}
+
+    class FakeOpenAIClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, path, json=None):
+            assert path == "responses"
+            call_count["value"] += 1
+            if call_count["value"] == 1:
+                return httpx.Response(
+                    200,
+                    json={
+                        "output_text": (
+                            '{"category":"exchange","label":"exchange_request","urgency":"medium",'
+                            '"confidence":0.92,"rationale":"교환 요청으로 판단했습니다."}'
+                        ),
+                        "usage": {"input_tokens": 100, "output_tokens": 30, "total_tokens": 130},
+                    },
+                )
+            return httpx.Response(503, text="temporary model issue")
+
+    monkeypatch.setattr("app.ai.openai_provider.httpx.Client", FakeOpenAIClient)
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        login_as(client)
+
+        classify_response = client.post("/api/claims/1/classify")
+        assert classify_response.status_code == 200
+        classify_payload = classify_response.json()
+        assert classify_payload["meta"]["provider_name"] == "openai_responses"
+        assert classify_payload["meta"]["usage"]["total_tokens"] == 130
+        assert classify_payload["meta"]["review_required"] is False
+
+        draft_response = client.post("/api/claims/1/draft-reply")
+        assert draft_response.status_code == 200
+        draft_payload = draft_response.json()
+        assert draft_payload["meta"]["provider_name"] == "mock_rule_based"
+        assert draft_payload["meta"]["requested_provider_name"] == "openai_responses"
+        assert draft_payload["meta"]["fallback_used"] is True
+        assert draft_payload["meta"]["review_required"] is True
+        assert "fallback_used" in draft_payload["meta"]["review_reasons"]
+
+        detail_response = client.get("/api/claims/1")
+        assert detail_response.status_code == 200
+        detail_payload = detail_response.json()
+        assert len(detail_payload["ai_invocations"]) == 2
+        assert detail_payload["ai_invocations"][0]["fallback_used"] is True
+        assert detail_payload["ai_invocations"][1]["provider_name"] == "openai_responses"
+        assert detail_payload["audit_logs"][0]["payload_json"]["provider_name"] in {"mock_rule_based", "openai_responses"}
+
+    with session_scope() as session:
+        invocations = list(session.query(AIInvocationLog).order_by(AIInvocationLog.id.asc()))
+        assert len(invocations) == 2
+        assert invocations[0].provider_name == "openai_responses"
+        assert invocations[0].total_tokens == 130
+        assert invocations[0].estimated_cost_usd > 0
+        assert invocations[1].fallback_used is True
 

@@ -9,7 +9,7 @@ ClaimMate AI is a local MVP skeleton for a Korean B2B SaaS that helps Cafe24 mer
 - Database: PostgreSQL for the recommended local stack
 - Cache placeholder: Redis
 - Local infra: Docker Compose with `web`, `api`, `postgres`, and `redis`
-- AI layer: deterministic offline mock provider with an OpenAI placeholder boundary
+- AI layer: deterministic offline mock provider plus OpenAI Responses API integration with fallback
 
 ## Folder Structure
 
@@ -41,6 +41,7 @@ Copy-Item api/.env.example api/.env
 By default this example keeps `DATABASE_URL` empty, so the backend falls back to local SQLite. If you want to use PostgreSQL from Docker Compose, set `DATABASE_URL=postgresql+psycopg://claimmate:claimmate@127.0.0.1:5432/claimmate` in `api/.env`.
 Auth and session vars are also included there: `SESSION_SECRET_KEY`, `SESSION_COOKIE_NAME`, `SESSION_MAX_AGE_SECONDS`.
 Optional Cafe24 placeholder vars are also included there: `CAFE24_CLIENT_ID`, `CAFE24_CLIENT_SECRET`, and `CAFE24_REDIRECT_URI`.
+AI productionization vars are also included there: `OPENAI_BASE_URL`, `OPENAI_TIMEOUT_SECONDS`, `OPENAI_INPUT_COST_PER_1M_TOKENS`, and `OPENAI_OUTPUT_COST_PER_1M_TOKENS`.
 Database lifecycle vars are also included there: `DATABASE_SCHEMA`, `AUTO_CREATE_TABLES`, and `CLAIM_RETENTION_DAYS`.
 
 3. Copy frontend env:
@@ -166,6 +167,41 @@ Useful job endpoints:
 - `GET /api/jobs/{job_id}`
 - `POST /api/jobs/process-pending`
 
+## AI Productionization
+
+ClaimMate now supports two AI paths:
+
+- `MockAIProvider`: fully offline, deterministic rule-based fallback
+- `OpenAIProvider`: real Responses API integration when `OPENAI_API_KEY` is configured
+
+Prompt and review rules live in:
+
+- `api/app/ai/prompts.py`
+- `api/app/ai/review_policy.py`
+
+Current implementation details:
+
+- Standard models such as `gpt-4o-mini` and `gpt-5.4` use structured JSON outputs
+- `*-pro` models fall back to JSON-text parsing because structured outputs are not universally available there
+- If OpenAI fails or returns invalid output, ClaimMate keeps the deterministic mock fallback path
+- Every classify/draft invocation records provider, model, prompt version, fallback state, token usage, estimated cost, evaluation checks, and human-review reasons in `ai_invocation_logs`
+
+Human review is required when any of the following apply:
+
+- AI fallback was used
+- confidence is below the configured threshold
+- the draft is missing order, customer, or policy references
+- the claim is high-risk, such as defect, misdelivery, refund, or otherwise urgent
+
+Relevant backend env vars:
+
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_BASE_URL`
+- `OPENAI_TIMEOUT_SECONDS`
+- `OPENAI_INPUT_COST_PER_1M_TOKENS`
+- `OPENAI_OUTPUT_COST_PER_1M_TOKENS`
+
 ## Database Lifecycle
 
 ClaimMate now includes an Alembic baseline migration, schema-aware PostgreSQL setup, demo-data reset commands, and claim soft-delete retention metadata.
@@ -289,7 +325,7 @@ docker compose logs -f web
 - Authentication and tenant isolation are implemented for local operator accounts, but there is no production-grade identity provider, password reset flow, or MFA yet.
 - Redis-backed background jobs are implemented for the local stack, but there is not yet a separate dedicated worker deployment, queue observability pipeline, or multi-node coordination strategy.
 - Cafe24 OAuth, live webhook verification, manual webhook retry, and manual Live Sync now perform real network calls when Cafe24 credentials are configured, but full production hardening and partner validation still remain.
-- OpenAI integration is a stub and always falls back to the deterministic mock logic.
+- OpenAI integration is implemented through the Responses API, but production prompt iteration, model benchmarking, and vendor-side quota tuning still remain.
 - Soft delete and retention are currently defined for claims. Broader archival rules across every auxiliary table are still an operational follow-up item.
 - The UI focuses on clarity and local runnability, not production-grade design coverage.
 - Docker Compose has not been executed in this workspace because Docker is not installed here, so the container definitions were added conservatively and kept close to the already verified local commands.

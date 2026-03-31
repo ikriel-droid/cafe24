@@ -68,6 +68,56 @@ export interface ReplyDelivery {
   updated_at: string;
 }
 
+export interface AIUsage {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number;
+}
+
+export interface AIEvaluationCheck {
+  name: string;
+  passed: boolean;
+  detail: string;
+}
+
+export interface AIResultMetadata {
+  provider_name: string;
+  requested_provider_name: string;
+  model_name: string;
+  prompt_key: string;
+  prompt_version: string;
+  fallback_used: boolean;
+  fallback_reason: string | null;
+  review_required: boolean;
+  review_reasons: string[];
+  evaluation_summary: string;
+  evaluation_checks: AIEvaluationCheck[];
+  usage: AIUsage;
+}
+
+export interface AIInvocationLog {
+  id: number;
+  action_type: string;
+  provider_name: string;
+  requested_provider_name: string;
+  model_name: string;
+  prompt_key: string;
+  prompt_version: string;
+  fallback_used: boolean;
+  fallback_reason: string | null;
+  review_required: boolean;
+  review_reasons_json: string[] | null;
+  evaluation_summary: string;
+  evaluation_checks_json: Array<Record<string, unknown>> | null;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number;
+  response_json: Record<string, unknown> | null;
+  created_at: string;
+}
+
 export interface ClaimAutomation {
   auto_triaged: boolean;
   auto_triaged_at: string | null;
@@ -108,6 +158,7 @@ export interface Claim {
   suggested_actions?: SuggestedAction[];
   audit_logs?: AuditLog[];
   reply_deliveries?: ReplyDelivery[];
+  ai_invocations?: AIInvocationLog[];
 }
 
 export interface Policy {
@@ -166,6 +217,7 @@ export interface ClassificationResponse {
   urgency: ClaimUrgency;
   confidence: number;
   rationale: string;
+  meta: AIResultMetadata;
 }
 
 export interface DraftReplyResponse {
@@ -173,6 +225,7 @@ export interface DraftReplyResponse {
   draft_reply: string;
   confidence: number;
   rationale: string;
+  meta: AIResultMetadata;
 }
 
 export interface Cafe24ActivityEvent {

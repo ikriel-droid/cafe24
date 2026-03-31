@@ -1,11 +1,11 @@
 # ClaimMate AI Product Checklist
 
-로컬 MVP 이후 실제 서비스 수준까지 가기 위한 작업 체크리스트입니다.
+로컬 MVP 이후 실제 서비스 완성까지 필요한 작업 체크리스트입니다.
 
 운영 규칙:
-- 아직 안 끝난 항목은 `[ ]`
+- 아직 남은 항목은 `[ ]`
 - 끝난 항목은 `[x]`
-- 작업이 끝날 때마다 이 파일을 바로 갱신
+- 작업이 끝날 때마다 바로 이 파일을 갱신
 
 ## 0. Current Baseline
 
@@ -38,7 +38,7 @@
 ## 3. Auth And Tenant Isolation
 
 - [x] 운영자 로그인 구현
-- [x] merchant 단위 데이터 격리
+- [x] merchant 범위 데이터 격리
 - [x] 권한 / 역할 구분
 - [x] API 세션 / 인증 처리
 - [x] merchant별 정책 / 연동 설정 분리
@@ -59,18 +59,18 @@
 - [x] 운영용 PostgreSQL 스키마 정리
 - [x] seed data와 운영 데이터 분리
 - [x] soft delete / 보존 정책 정의
-- [x] 백업 / 복구 점검 문서화
+- [x] 백업 / 복구 기초 문서화
 - [x] 샘플 데이터 초기화 명령 분리
 
 ## 6. AI Productionization
 
-- [ ] OpenAI 실제 provider 구현
-- [ ] prompt / system rule 관리 방식 정리
-- [ ] merchant 정책 반영 프롬프트 개선
-- [ ] AI 실패 시 deterministic fallback 정책 유지
-- [ ] 모델 비용 / 토큰 사용량 기록
-- [ ] 답변 품질 평가 기준 정리
-- [ ] human review 기준 명확화
+- [x] OpenAI 실제 provider 구현
+- [x] prompt / system rule 관리 방식 정리
+- [x] merchant 정책 반영 프롬프트 개선
+- [x] AI 실패 시 deterministic fallback 정책 유지
+- [x] 모델 비용 / 토큰 사용량 기록
+- [x] 답변 초안 평가 기준 정리
+- [x] human review 기준 명확화
 
 ## 7. Operations UX
 

@@ -54,6 +54,56 @@ class ReplyDeliveryRead(ORMModel):
     updated_at: datetime
 
 
+class AIUsageRead(BaseModel):
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    estimated_cost_usd: float
+
+
+class AIEvaluationCheckRead(BaseModel):
+    name: str
+    passed: bool
+    detail: str
+
+
+class AIResultMetadataRead(BaseModel):
+    provider_name: str
+    requested_provider_name: str
+    model_name: str
+    prompt_key: str
+    prompt_version: str
+    fallback_used: bool
+    fallback_reason: str | None
+    review_required: bool
+    review_reasons: list[str]
+    evaluation_summary: str
+    evaluation_checks: list[AIEvaluationCheckRead]
+    usage: AIUsageRead
+
+
+class AIInvocationLogRead(ORMModel):
+    id: int
+    action_type: str
+    provider_name: str
+    requested_provider_name: str
+    model_name: str
+    prompt_key: str
+    prompt_version: str
+    fallback_used: bool
+    fallback_reason: str | None
+    review_required: bool
+    review_reasons_json: list[str] | None
+    evaluation_summary: str
+    evaluation_checks_json: list[dict[str, Any]] | None
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    estimated_cost_usd: float
+    response_json: dict[str, Any] | None
+    created_at: datetime
+
+
 class ClaimAutomationRead(BaseModel):
     auto_triaged: bool
     auto_triaged_at: datetime | None
@@ -97,6 +147,7 @@ class ClaimDetail(ClaimListItem):
     suggested_actions: list[SuggestedActionRead]
     audit_logs: list[AuditLogRead]
     reply_deliveries: list[ReplyDeliveryRead]
+    ai_invocations: list[AIInvocationLogRead] = Field(default_factory=list)
 
 
 class ClaimStatusUpdate(BaseModel):
@@ -168,6 +219,7 @@ class ClassificationResponse(BaseModel):
     urgency: ClaimUrgency
     confidence: float
     rationale: str
+    meta: AIResultMetadataRead
 
 
 class DraftReplyResponse(BaseModel):
@@ -175,6 +227,7 @@ class DraftReplyResponse(BaseModel):
     draft_reply: str
     confidence: float
     rationale: str
+    meta: AIResultMetadataRead
 
 
 class Cafe24MockWebhookRequest(BaseModel):
