@@ -1,109 +1,109 @@
 # ClaimMate AI Product Checklist
 
-로컬 MVP 이후 실제 서비스 완성까지 필요한 작업 체크리스트입니다.
+This checklist tracks the work required to move from the local MVP to a production-ready commercial product.
 
-운영 규칙:
-- 아직 안 끝난 항목은 `[ ]`
-- 끝난 항목은 `[x]`
-- 작업이 끝날 때마다 바로 이 파일을 갱신
+Working rules:
+- Use `[ ]` for open items.
+- Use `[x]` for completed items.
+- Update this file immediately when a task is finished.
 
 ## 0. Current Baseline
 
-- [x] 로컬 MVP 실행 경로 정리
-- [x] 인박스 / 상세 / 정책 / 대시보드 화면 구성
-- [x] Mock AI 분류 / 답변 초안 생성
-- [x] Mock Cafe24 sync / webhook / OAuth placeholder
-- [x] 백엔드 테스트 / 프런트 빌드 / 로컬 실행 스크립트 정리
+- [x] Local MVP run path stabilized
+- [x] Dashboard / inbox / claim detail / policy / Cafe24 console implemented
+- [x] Mock AI classification and draft reply flow implemented
+- [x] Mock Cafe24 sync / webhook / OAuth placeholder implemented
+- [x] Backend tests / frontend build / local run scripts organized
 
 ## 1. Live Cafe24 Integration
 
-- [x] Cafe24 실제 OAuth authorize / callback / token exchange 구현
-- [x] Cafe24 access token 저장 및 갱신 처리
-- [x] Cafe24 주문 / 배송 / 클레임 실제 sync 구현
-- [x] Cafe24 webhook 실제 엔드포인트 연결
-- [x] webhook 서명 검증 및 위변조 방지
-- [x] webhook 중복 수신 방지 키 처리
-- [x] webhook 실패 재시도 정책 정리
-- [x] mock integration 상태를 실제 integration 상태 모델로 치환
+- [x] Implement real Cafe24 OAuth authorize / callback / token exchange
+- [x] Persist and refresh Cafe24 access tokens
+- [x] Implement real Cafe24 order / shipment / claim sync
+- [x] Connect real Cafe24 webhook endpoint
+- [x] Add webhook signature verification and tamper protection
+- [x] Add webhook dedupe key handling
+- [x] Define webhook failure retry policy
+- [x] Replace mock integration state with real integration state models
 
 ## 2. Reply Delivery
 
-- [x] 실제 고객 응대 채널 발송 경로 결정
-- [x] 답변 발송 API 구현
-- [x] 발송 성공 / 실패 / 재시도 상태 모델 추가
-- [x] 발송 이력 상세 조회 화면 보강
-- [x] resend 정책 정의
-- [x] 발송 실패 재시도 추가
+- [x] Decide real customer reply delivery channel
+- [x] Implement reply delivery API
+- [x] Add delivery success / failure / retry state model
+- [x] Improve delivery history in claim detail
+- [x] Define resend policy
+- [x] Add retry flow for failed deliveries
 
 ## 3. Auth And Tenant Isolation
 
-- [x] 운영자 로그인 구현
-- [x] merchant 범위 데이터 격리
-- [x] 권한 / 역할 구분
-- [x] API 세션 / 인증 처리
-- [x] merchant별 정책 / 연동 설정 분리
-- [x] 감사 로그 열람 권한 제한
+- [x] Implement operator login
+- [x] Isolate data by merchant scope
+- [x] Separate roles and permissions
+- [x] Add API session / authentication handling
+- [x] Separate merchant policies and integration settings
+- [x] Restrict audit log access by role
 
 ## 4. Background Jobs And Reliability
 
-- [x] Redis 기반 job queue 실제 사용
-- [x] sync 비동기 작업 분리
-- [x] webhook 처리 비동기화
-- [x] job retry / dead-letter 정책 추가
-- [x] 실시간 작업 상태 추적
-- [x] 운영자 수동 버튼과 job 상태 연결
+- [x] Use a Redis-backed job queue in the real flow
+- [x] Move sync into asynchronous jobs
+- [x] Move webhook processing into asynchronous jobs
+- [x] Add job retry / dead-letter handling
+- [x] Track real-time job status
+- [x] Connect operations buttons to live job state
 
 ## 5. Database And Data Lifecycle
 
-- [x] Alembic migration 도입
-- [x] 운영용 PostgreSQL 스키마 정리
-- [x] seed data와 운영 데이터 분리
-- [x] soft delete / 보존 정책 정의
-- [x] 백업 / 복구 기초 문서화
-- [x] 샘플 데이터 초기화 명령 분리
+- [x] Introduce Alembic migrations
+- [x] Organize the production PostgreSQL schema
+- [x] Separate seed/demo data from live data
+- [x] Define soft delete and retention policy
+- [x] Document backup and recovery basics
+- [x] Split demo reset commands from normal operations
 
 ## 6. AI Productionization
 
-- [x] OpenAI 실제 provider 구현
-- [x] prompt / system rule 관리 방식 정리
-- [x] merchant 정책 반영 프롬프트 개선
-- [x] AI 실패 시 deterministic fallback 정책 유지
-- [x] 모델 비용 / 토큰 사용량 기록
-- [x] 답변 초안 평가 기준 정리
-- [x] human review 기준 명확화
+- [x] Implement a real OpenAI provider
+- [x] Organize prompt and system rule management
+- [x] Improve merchant-policy-aware prompting
+- [x] Keep deterministic fallback for AI failures
+- [x] Record model cost and token usage
+- [x] Define draft quality evaluation criteria
+- [x] Make human-review rules explicit
 
 ## 7. Operations UX
 
-- [x] 대시보드 KPI 최종 정의
-- [x] 운영자 메모 / 인수인계 UX 보강
-- [x] 감사 로그 검색 / 필터 추가
-- [x] 클레임 이력 diff 보기
-- [x] bulk action 지원 여부 결정
-- [x] SLA / 긴급도 기준 정리
+- [x] Finalize dashboard KPI definitions
+- [x] Improve operator notes and handoff UX
+- [x] Add audit log search and filtering
+- [x] Show audit diff details
+- [x] Decide bulk action support
+- [x] Define SLA and urgency guidance
 
 ## 8. Observability And Safety
 
-- [x] 구조화된 에러 로깅 추가
-- [x] API / webhook / job 메트릭 수집
-- [x] 알림 채널 연동
-- [x] rate limit / timeout / circuit breaker 정책
-- [x] 민감정보 마스킹 규칙 적용
-- [x] 관리자용 진단 페이지 추가
+- [x] Add structured error logging
+- [x] Collect API / webhook / job metrics
+- [x] Add alert channel integration
+- [x] Define rate limit / timeout / circuit breaker policies
+- [x] Apply sensitive-data masking rules
+- [x] Add a manager-only diagnostics page
 
 ## 9. Deployment And Release
 
-- [x] production Docker image 정리
-- [x] 배포 환경변수 템플릿 정리
-- [x] staging / production 분리
-- [x] HTTPS / 도메인 / reverse proxy 구성
-- [x] CI build / test / deploy 파이프라인 추가
-- [x] 운영 문서 / 장애 대응 문서 정리
+- [x] Prepare production Docker images
+- [x] Organize deployment environment templates
+- [x] Separate staging and production assets
+- [x] Add HTTPS / domain / reverse proxy configuration
+- [x] Add CI build / test / release workflows
+- [x] Document deployment and incident response
 
 ## 10. Commercial Readiness
 
-- [ ] merchant onboarding 플로우
-- [ ] 설치 가이드 / 운영 가이드 문서화
-- [ ] 과금 기준 정의
-- [ ] 사용량 측정 방식 설계
-- [ ] 개인정보 처리 / 보관 정책 검토
-- [ ] 베타 고객 검증 시나리오 확정
+- [x] Add merchant onboarding flow
+- [x] Add installation and operations guides
+- [x] Define pricing and packaging
+- [x] Define usage metering design
+- [x] Review privacy and retention policy
+- [x] Define beta customer validation scenario

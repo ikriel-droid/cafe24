@@ -18,6 +18,7 @@ const links: Array<{
 }> = [
   { href: "/dashboard", label: "대시보드" },
   { href: "/inbox", label: "인박스" },
+  { href: "/onboarding", label: "온보딩", allowedRoles: ["manager"] },
   { href: "/integrations/cafe24", label: "Cafe24 연동", allowedRoles: ["manager"] },
   { href: "/settings/policy", label: "정책 설정", allowedRoles: ["manager"] },
   { href: "/admin/diagnostics", label: "운영 진단", allowedRoles: ["manager"] },

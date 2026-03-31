@@ -381,6 +381,21 @@ Operational docs:
 - deployment runbook: [DEPLOYMENT_RUNBOOK.md](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\DEPLOYMENT_RUNBOOK.md)
 - incident response runbook: [INCIDENT_RESPONSE_RUNBOOK.md](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\INCIDENT_RESPONSE_RUNBOOK.md)
 
+## Commercial Readiness
+
+ClaimMate now includes a manager-only onboarding surface at `/onboarding` that turns commercial readiness into an operational checklist.
+
+- onboarding page: [web/app/onboarding/page.tsx](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\web\app\onboarding\page.tsx)
+- onboarding guide: [MERCHANT_ONBOARDING_GUIDE.md](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\MERCHANT_ONBOARDING_GUIDE.md)
+- installation guide: [INSTALLATION_GUIDE.md](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\INSTALLATION_GUIDE.md)
+- operations guide: [OPERATIONS_GUIDE.md](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\OPERATIONS_GUIDE.md)
+- pricing and packaging: [PRICING_AND_PACKAGING.md](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\PRICING_AND_PACKAGING.md)
+- usage metering plan: [USAGE_METERING_PLAN.md](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\USAGE_METERING_PLAN.md)
+- privacy and retention policy: [PRIVACY_AND_RETENTION_POLICY.md](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\PRIVACY_AND_RETENTION_POLICY.md)
+- beta validation plan: [BETA_VALIDATION_PLAN.md](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\BETA_VALIDATION_PLAN.md)
+
+The onboarding page is meant to be the operator-facing control point before a merchant starts beta usage. The supporting documents define pricing, metering, privacy, installation, and beta validation expectations so that the product is not only runnable, but also sellable and operable.
+
 ## Useful Commands
 
 Backend tests:
@@ -411,6 +426,7 @@ docker compose logs -f web
 - Cafe24 OAuth, live webhook verification, manual webhook retry, and manual Live Sync now perform real network calls when Cafe24 credentials are configured, but full production hardening and partner validation still remain.
 - OpenAI integration is implemented through the Responses API, but production prompt iteration, model benchmarking, and vendor-side quota tuning still remain.
 - Soft delete and retention are currently defined for claims. Broader archival rules across every auxiliary table are still an operational follow-up item.
+- Pricing, privacy, and beta validation artifacts are now documented, but legal review, contract language, tax handling, and final commercial sign-off still require human approval outside the codebase.
 - The UI focuses on clarity and local runnability, not production-grade design coverage.
 - Docker Compose has not been executed in this workspace because Docker is not installed here, so the container definitions were added conservatively and kept close to the already verified local commands.
 - `complete-claimmate.ps1` automates everything that is local and deterministic, but Cafe24 partner approval, real endpoint mapping validation, production auth hardening, and deployment still require manual implementation work outside the current MVP.

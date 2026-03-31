@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
@@ -74,7 +75,14 @@ def get_or_create_connection(session: Session, merchant: Merchant) -> Cafe24Conn
         mall_id=merchant.mall_name,
     )
     session.add(connection)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        existing_connection = get_connection(session, merchant.id)
+        if existing_connection is not None:
+            return existing_connection
+        raise
     session.refresh(connection)
     return connection
 
