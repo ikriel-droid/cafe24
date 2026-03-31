@@ -14,6 +14,7 @@ htmlcov/
 .tmp/
 claimmate.db
 api/claimmate.db
+api/claimmate.*.bak.db
 api/test.db
 web/node_modules/
 web/.next/

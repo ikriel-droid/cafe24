@@ -401,6 +401,13 @@ The onboarding page is meant to be the operator-facing control point before a me
 
 For an honest go-live view, keep [PRODUCT_CHECKLIST.md](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\PRODUCT_CHECKLIST.md) section `12. External Validation And Go-Live Reality Check` in view. The product now has strong local implementation coverage, but real Cafe24 partner validation, staging rollout, and commercial sign-off are still separate steps.
 
+The first live validation step now has a dedicated runner and runbook:
+
+- runner: [validate-cafe24-live-oauth.ps1](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\validate-cafe24-live-oauth.ps1)
+- runbook: [LIVE_CAFE24_OAUTH_VALIDATION_RUNBOOK.md](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\LIVE_CAFE24_OAUTH_VALIDATION_RUNBOOK.md)
+
+This runner automates everything around the real Cafe24 OAuth check except the merchant-side browser approval itself.
+
 ## Useful Commands
 
 Backend tests:
