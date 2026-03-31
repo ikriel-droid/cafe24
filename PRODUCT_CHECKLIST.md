@@ -107,3 +107,8 @@ Working rules:
 - [x] Define usage metering design
 - [x] Review privacy and retention policy
 - [x] Define beta customer validation scenario
+
+## 11. Optional Polish
+
+- [x] Add manager launch-kit hub page
+- [x] Add copyable onboarding readiness summary

@@ -385,7 +385,10 @@ Operational docs:
 
 ClaimMate now includes a manager-only onboarding surface at `/onboarding` that turns commercial readiness into an operational checklist.
 
+Optional polish also adds a manager-only launch-kit hub at `/resources` so operators can move between onboarding, diagnostics, pricing, privacy, and beta validation material without leaving the app shell.
+
 - onboarding page: [web/app/onboarding/page.tsx](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\web\app\onboarding\page.tsx)
+- launch-kit page: [web/app/resources/page.tsx](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\web\app\resources\page.tsx)
 - onboarding guide: [MERCHANT_ONBOARDING_GUIDE.md](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\MERCHANT_ONBOARDING_GUIDE.md)
 - installation guide: [INSTALLATION_GUIDE.md](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\INSTALLATION_GUIDE.md)
 - operations guide: [OPERATIONS_GUIDE.md](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\OPERATIONS_GUIDE.md)

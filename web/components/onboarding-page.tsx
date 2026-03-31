@@ -17,11 +17,29 @@ function toneForReady(ready: boolean) {
   return ready ? "teal" : "accent";
 }
 
+async function copyText(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const helper = document.createElement("textarea");
+  helper.value = value;
+  helper.setAttribute("readonly", "true");
+  helper.style.position = "absolute";
+  helper.style.left = "-9999px";
+  document.body.appendChild(helper);
+  helper.select();
+  document.execCommand("copy");
+  document.body.removeChild(helper);
+}
+
 export function OnboardingPage() {
   const { session } = useAuthSession();
   const [snapshot, setSnapshot] = useState<OnboardingSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (session.role !== "manager") {
@@ -59,6 +77,15 @@ export function OnboardingPage() {
       cancelled = true;
     };
   }, [session.role]);
+
+  useEffect(() => {
+    if (!notice) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setNotice(null), 2800);
+    return () => window.clearTimeout(timeoutId);
+  }, [notice]);
 
   const steps = useMemo(() => {
     if (!snapshot) {
@@ -129,6 +156,33 @@ export function OnboardingPage() {
     ];
   }, [session, snapshot]);
 
+  const blockers = useMemo(() => steps.filter((step) => !step.ready).map((step) => step.title), [steps]);
+  const completedCount = steps.filter((step) => step.ready).length;
+
+  const readinessSummary = useMemo(() => {
+    if (!snapshot) {
+      return "";
+    }
+
+    return [
+      `[ClaimMate Readiness Summary]`,
+      `Merchant: ${session.merchant.mall_name}`,
+      `Manager: ${session.name} (${session.email})`,
+      `Completion: ${completedCount}/${steps.length}`,
+      `Cafe24: ${snapshot.integration.connected ? "connected" : "not connected"} / ${snapshot.integration.health_title}`,
+      `Last Sync: ${snapshot.integration.last_synced_at ? formatDate(snapshot.integration.last_synced_at) : "none"}`,
+      `Policy: exchange ${snapshot.policy.exchange_window_days}d / return ${snapshot.policy.return_window_days}d / return fee ${snapshot.policy.return_shipping_fee} KRW`,
+      `Diagnostics: alerts ${snapshot.diagnostics.recent_alerts.length} / rate limits ${snapshot.diagnostics.rate_limit_policies.length} / masking ${snapshot.diagnostics.masking_rules.length}`,
+      `Blockers: ${blockers.length ? blockers.join(", ") : "none"}`,
+      `Next Action: ${blockers.length ? blockers[0] : "Beta start ready"}`,
+    ].join("\n");
+  }, [blockers, completedCount, session, snapshot, steps.length]);
+
+  async function handleCopySummary() {
+    await copyText(readinessSummary);
+    setNotice("공유용 readiness summary를 복사했습니다.");
+  }
+
   if (session.role !== "manager") {
     return <div className="error-banner">온보딩 화면은 매니저 권한에서만 확인할 수 있습니다.</div>;
   }
@@ -144,8 +198,6 @@ export function OnboardingPage() {
   if (!snapshot) {
     return <div className="error-banner">온보딩 데이터를 불러오지 못했습니다.</div>;
   }
-
-  const completedCount = steps.filter((step) => step.ready).length;
 
   return (
     <div className="stack">
@@ -165,6 +217,8 @@ export function OnboardingPage() {
         </div>
       </header>
 
+      {notice ? <div className="success-state">{notice}</div> : null}
+
       <section className="grid cols-3">
         <div className="card stack">
           <h3>현재 머천트</h3>
@@ -181,6 +235,24 @@ export function OnboardingPage() {
           <div className="metric-value">{snapshot.diagnostics.recent_alerts.length}</div>
           <p className="metric-caption">최근 alert / 5xx는 운영 진단 페이지에서 확인</p>
         </div>
+      </section>
+
+      <section className="card stack">
+        <header className="compact-header page-header">
+          <div>
+            <h3>공유용 Readiness Summary</h3>
+            <p>내부 공유나 베타 시작 전 점검 메모로 바로 사용할 수 있는 요약입니다.</p>
+          </div>
+          <div className="actions">
+            <button className="button ghost" type="button" onClick={() => void handleCopySummary()}>
+              Summary 복사
+            </button>
+            <Link className="button secondary" href="/resources">
+              런치 킷 열기
+            </Link>
+          </div>
+        </header>
+        <pre className="diagnostics-code">{readinessSummary}</pre>
       </section>
 
       <section className="card stack">
@@ -234,6 +306,10 @@ export function OnboardingPage() {
             <Link className="resource-link" href="/admin/diagnostics">
               <strong>운영 진단</strong>
               <span>알림, masking, circuit breaker, request metrics를 최종 확인합니다.</span>
+            </Link>
+            <Link className="resource-link" href="/resources">
+              <strong>런치 킷</strong>
+              <span>온보딩, 설치, 운영, 가격, 프라이버시, 베타 검증 자료를 한 화면에서 정리합니다.</span>
             </Link>
           </div>
         </div>
