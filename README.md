@@ -399,6 +399,8 @@ Optional polish also adds a manager-only launch-kit hub at `/resources` so opera
 
 The onboarding page is meant to be the operator-facing control point before a merchant starts beta usage. The supporting documents define pricing, metering, privacy, installation, and beta validation expectations so that the product is not only runnable, but also sellable and operable.
 
+For an honest go-live view, keep [PRODUCT_CHECKLIST.md](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\PRODUCT_CHECKLIST.md) section `12. External Validation And Go-Live Reality Check` in view. The product now has strong local implementation coverage, but real Cafe24 partner validation, staging rollout, and commercial sign-off are still separate steps.
+
 ## Useful Commands
 
 Backend tests:

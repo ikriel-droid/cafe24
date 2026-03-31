@@ -2,6 +2,10 @@
 
 This checklist tracks the work required to move from the local MVP to a production-ready commercial product.
 
+Important distinction:
+- Sections 0 through 11 mostly track what is implemented in the repository and locally verified.
+- Section 12 tracks what still requires real external validation, partner coordination, or business sign-off before this can honestly be called production-ready.
+
 Working rules:
 - Use `[ ]` for open items.
 - Use `[x]` for completed items.
@@ -112,3 +116,13 @@ Working rules:
 
 - [x] Add manager launch-kit hub page
 - [x] Add copyable onboarding readiness summary
+
+## 12. External Validation And Go-Live Reality Check
+
+- [ ] Validate Cafe24 OAuth end to end with a real merchant app install
+- [ ] Validate Cafe24 live sync against real order / shipment / claim payloads
+- [ ] Validate Cafe24 live webhook handling with real signed deliveries
+- [ ] Decide and validate the real reply-delivery channel beyond manual handoff and generic webhook
+- [ ] Run a real staging deployment and complete an operator smoke test there
+- [ ] Complete legal / privacy / contract review for commercial release
+- [ ] Complete first beta-customer onboarding and capture measured success metrics
