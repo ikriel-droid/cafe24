@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -15,13 +15,34 @@ _session_factory: sessionmaker[Session] | None = None
 _bootstrapped = False
 
 
+def is_postgresql_url(database_url: str) -> bool:
+    return database_url.startswith("postgresql")
+
+
 def _build_engine(database_url: str) -> Engine:
     engine_kwargs: dict[str, object] = {"future": True}
+    settings = get_settings()
     if database_url.startswith("sqlite"):
         engine_kwargs["connect_args"] = {"check_same_thread": False}
         if database_url in {"sqlite://", "sqlite:///:memory:"}:
             engine_kwargs["poolclass"] = StaticPool
+    elif is_postgresql_url(database_url) and settings.database_schema:
+        engine_kwargs["connect_args"] = {"options": f"-csearch_path={settings.database_schema}"}
     return create_engine(database_url, **engine_kwargs)
+
+
+def ensure_database_schema(engine: Engine) -> None:
+    settings = get_settings()
+    if not is_postgresql_url(settings.database_url):
+        return
+
+    schema_name = settings.database_schema.strip()
+    if not schema_name or schema_name == "public":
+        return
+
+    quoted_schema = schema_name.replace('"', '""')
+    with engine.begin() as connection:
+        connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{quoted_schema}"'))
 
 
 def init_engine(force: bool = False) -> Engine:
@@ -55,10 +76,13 @@ def bootstrap_database(force: bool = False) -> Engine:
     from app.models import Base
     from app.services.seed import seed_demo_data
 
-    Base.metadata.create_all(bind=engine)
-
     settings = get_settings()
-    if settings.seed_demo_data:
+    ensure_database_schema(engine)
+
+    if settings.auto_create_tables:
+        Base.metadata.create_all(bind=engine)
+
+    if settings.seed_demo_data and settings.app_env != "production" and inspect(engine).has_table("merchants"):
         session_local = get_session_factory()
         db = session_local()
         try:

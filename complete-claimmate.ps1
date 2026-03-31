@@ -133,9 +133,9 @@ function Get-RoadmapLines {
     "Remaining manual blockers to reach a production-complete ClaimMate AI:",
     "- Cafe24 partner approval and official live API credentials",
     "- Real Cafe24 endpoint mapping for OAuth, orders, claims, and webhooks",
-    "- Background processing with Redis for webhook ingestion and sync jobs",
-    "- Authentication, merchant isolation, and operator permissions",
-    "- Deployment, observability, backups, and incident handling",
+    "- Production identity, password recovery, and stronger operator security controls",
+    "- OpenAI production provider rollout, prompt governance, and quality review policy",
+    "- Deployment, observability, scheduled backups, and incident handling",
     "- Payment/billing, audit retention, and security review before external rollout"
   )
 }

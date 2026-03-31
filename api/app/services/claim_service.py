@@ -120,7 +120,7 @@ def list_claims(
     merchant = get_default_merchant(session, merchant_id, operator)
     query = (
         select(Claim)
-        .where(Claim.merchant_id == merchant.id)
+        .where(Claim.merchant_id == merchant.id, Claim.deleted_at.is_(None))
         .options(
             selectinload(Claim.suggested_actions),
             selectinload(Claim.audit_logs),
@@ -175,7 +175,7 @@ def list_claims(
 def get_claim(session: Session, claim_id: int, operator: OperatorUser | None = None) -> Claim:
     query = (
         select(Claim)
-        .where(Claim.id == claim_id)
+        .where(Claim.id == claim_id, Claim.deleted_at.is_(None))
         .options(
             selectinload(Claim.messages),
             selectinload(Claim.suggested_actions),
@@ -567,7 +567,11 @@ def apply_mock_webhook_to_claim(
     if rule is None:
         return None
 
-    query = select(Claim).where(Claim.merchant_id == merchant_id, Claim.order_no == order_no)
+    query = select(Claim).where(
+        Claim.merchant_id == merchant_id,
+        Claim.order_no == order_no,
+        Claim.deleted_at.is_(None),
+    )
     claim = session.scalar(query)
     if claim is None:
         return None
@@ -641,7 +645,11 @@ def apply_live_webhook_to_claim(
     if rule is None:
         return None
 
-    query = select(Claim).where(Claim.merchant_id == merchant_id, Claim.order_no == order_no)
+    query = select(Claim).where(
+        Claim.merchant_id == merchant_id,
+        Claim.order_no == order_no,
+        Claim.deleted_at.is_(None),
+    )
     claim = session.scalar(query)
     if claim is None:
         return None

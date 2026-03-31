@@ -639,6 +639,7 @@ def _upsert_claim_from_live_order(
             Claim.merchant_id == merchant.id,
             Claim.order_no == synced["order_no"],
             Claim.category == synced["category"],
+            Claim.deleted_at.is_(None),
         )
         .options(selectinload(Claim.suggested_actions), selectinload(Claim.audit_logs), selectinload(Claim.messages))
     )

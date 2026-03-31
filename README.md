@@ -41,6 +41,7 @@ Copy-Item api/.env.example api/.env
 By default this example keeps `DATABASE_URL` empty, so the backend falls back to local SQLite. If you want to use PostgreSQL from Docker Compose, set `DATABASE_URL=postgresql+psycopg://claimmate:claimmate@127.0.0.1:5432/claimmate` in `api/.env`.
 Auth and session vars are also included there: `SESSION_SECRET_KEY`, `SESSION_COOKIE_NAME`, `SESSION_MAX_AGE_SECONDS`.
 Optional Cafe24 placeholder vars are also included there: `CAFE24_CLIENT_ID`, `CAFE24_CLIENT_SECRET`, and `CAFE24_REDIRECT_URI`.
+Database lifecycle vars are also included there: `DATABASE_SCHEMA`, `AUTO_CREATE_TABLES`, and `CLAIM_RETENTION_DAYS`.
 
 3. Copy frontend env:
 
@@ -165,6 +166,30 @@ Useful job endpoints:
 - `GET /api/jobs/{job_id}`
 - `POST /api/jobs/process-pending`
 
+## Database Lifecycle
+
+ClaimMate now includes an Alembic baseline migration, schema-aware PostgreSQL setup, demo-data reset commands, and claim soft-delete retention metadata.
+
+Common commands:
+
+```powershell
+cd api
+.\.venv\Scripts\alembic upgrade head
+.\.venv\Scripts\python -m app.scripts.data_lifecycle seed-demo
+.\.venv\Scripts\python -m app.scripts.data_lifecycle reset-demo
+.\.venv\Scripts\python -m app.scripts.data_lifecycle purge-soft-deleted
+```
+
+Windows shortcut for demo reset:
+
+```powershell
+.\reset-claimmate-demo.ps1
+```
+
+For the full migration, schema, backup, restore, and retention runbook, see:
+
+- `DATABASE_RUNBOOK.md`
+
 ## One-Command Local Start
 
 If you want one command that starts the backend and serves the exported frontend through the same local server:
@@ -232,6 +257,7 @@ After any run that includes `report`, inspect:
 The tracked remaining work lives in:
 
 - `PRODUCT_CHECKLIST.md`
+- `DATABASE_RUNBOOK.md`
 
 This file is the source of truth for post-MVP work. As items are completed, they should be updated from `[ ]` to `[x]`.
 
@@ -264,6 +290,7 @@ docker compose logs -f web
 - Redis-backed background jobs are implemented for the local stack, but there is not yet a separate dedicated worker deployment, queue observability pipeline, or multi-node coordination strategy.
 - Cafe24 OAuth, live webhook verification, manual webhook retry, and manual Live Sync now perform real network calls when Cafe24 credentials are configured, but full production hardening and partner validation still remain.
 - OpenAI integration is a stub and always falls back to the deterministic mock logic.
+- Soft delete and retention are currently defined for claims. Broader archival rules across every auxiliary table are still an operational follow-up item.
 - The UI focuses on clarity and local runnability, not production-grade design coverage.
 - Docker Compose has not been executed in this workspace because Docker is not installed here, so the container definitions were added conservatively and kept close to the already verified local commands.
 - `complete-claimmate.ps1` automates everything that is local and deterministic, but Cafe24 partner approval, real endpoint mapping validation, production auth hardening, and deployment still require manual implementation work outside the current MVP.

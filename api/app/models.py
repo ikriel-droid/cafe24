@@ -61,12 +61,23 @@ class BackgroundJobStatus(str, Enum):
     DEAD_LETTER = "dead_letter"
 
 
+class MerchantDataOrigin(str, Enum):
+    DEMO = "demo"
+    LIVE = "live"
+
+
 class Merchant(Base):
     __tablename__ = "merchants"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     mall_name: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
+    data_origin: Mapped[MerchantDataOrigin] = mapped_column(
+        SqlEnum(MerchantDataOrigin, native_enum=False),
+        nullable=False,
+        default=MerchantDataOrigin.LIVE,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     policy: Mapped["Policy | None"] = relationship(back_populates="merchant", uselist=False)
@@ -148,6 +159,10 @@ class Claim(Base):
         nullable=False,
         default=ClaimUrgency.MEDIUM,
     )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    delete_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    retention_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -47,11 +47,14 @@ services:
       APP_ENV: docker
       API_PREFIX: /api
       DATABASE_URL: postgresql+psycopg://claimmate:claimmate@postgres:5432/claimmate
+      DATABASE_SCHEMA: ${DATABASE_SCHEMA:-claimmate}
+      AUTO_CREATE_TABLES: "true"
       REDIS_URL: redis://redis:6379/0
       CORS_ORIGINS: http://127.0.0.1:${WEB_PORT:-3000},http://localhost:${WEB_PORT:-3000}
       DEFAULT_MERCHANT_ID: 1
       OPENAI_API_KEY: ""
       OPENAI_MODEL: gpt-4o-mini
+      CLAIM_RETENTION_DAYS: "90"
       SEED_DEMO_DATA: "true"
     ports:
       - "${API_PORT:-8000}:8000"

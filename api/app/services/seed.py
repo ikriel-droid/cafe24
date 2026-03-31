@@ -12,6 +12,7 @@ from app.models import (
     ClaimStatus,
     ClaimUrgency,
     Merchant,
+    MerchantDataOrigin,
     OperatorRole,
     OperatorUser,
     Policy,
@@ -216,11 +217,17 @@ def seed_operators(session: Session, merchant: Merchant, operators: list[dict[st
 
 
 def seed_demo_data(session: Session) -> None:
-    merchant_exists = session.scalar(select(Merchant.id).limit(1))
-    if merchant_exists:
+    demo_merchant_exists = session.scalar(
+        select(Merchant.id).where(Merchant.data_origin == MerchantDataOrigin.DEMO).limit(1)
+    )
+    if demo_merchant_exists:
         return
 
-    alpha_merchant = Merchant(name="알파스토어 운영팀", mall_name="alpha-seller")
+    alpha_merchant = Merchant(
+        name="알파스토어 운영팀",
+        mall_name="alpha-seller",
+        data_origin=MerchantDataOrigin.DEMO,
+    )
     session.add(alpha_merchant)
     session.flush()
 
@@ -261,7 +268,11 @@ def seed_demo_data(session: Session) -> None:
         ],
     )
 
-    beta_merchant = Merchant(name="베타셀렉트 운영팀", mall_name="beta-select")
+    beta_merchant = Merchant(
+        name="베타셀렉트 운영팀",
+        mall_name="beta-select",
+        data_origin=MerchantDataOrigin.DEMO,
+    )
     session.add(beta_merchant)
     session.flush()
 

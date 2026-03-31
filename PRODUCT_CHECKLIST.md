@@ -55,12 +55,12 @@
 
 ## 5. Database And Data Lifecycle
 
-- [ ] Alembic migration 도입
-- [ ] 운영용 PostgreSQL 스키마 정리
-- [ ] seed data와 운영 데이터 분리
-- [ ] soft delete / 보존 정책 정의
-- [ ] 백업 / 복구 점검 문서화
-- [ ] 샘플 데이터 초기화 명령 분리
+- [x] Alembic migration 도입
+- [x] 운영용 PostgreSQL 스키마 정리
+- [x] seed data와 운영 데이터 분리
+- [x] soft delete / 보존 정책 정의
+- [x] 백업 / 복구 점검 문서화
+- [x] 샘플 데이터 초기화 명령 분리
 
 ## 6. AI Productionization
 

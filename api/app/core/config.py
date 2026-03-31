@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     app_env: str = "development"
     api_prefix: str = "/api"
     database_url: str = "sqlite:///./claimmate.db"
+    database_schema: str = "claimmate"
+    auto_create_tables: bool = True
     redis_url: str = "redis://127.0.0.1:6379/0"
     cors_origins: Annotated[list[str], NoDecode] = [
         "http://127.0.0.1:3000",
@@ -46,6 +48,7 @@ class Settings(BaseSettings):
     background_job_batch_size: int = 10
     background_job_retry_base_seconds: int = 5
     background_job_retry_max_seconds: int = 60
+    claim_retention_days: int = 90
     seed_demo_data: bool = True
 
     @field_validator("database_url", mode="before")
@@ -55,6 +58,14 @@ class Settings(BaseSettings):
             return "sqlite:///./claimmate.db"
         normalized = value.strip()
         return normalized or "sqlite:///./claimmate.db"
+
+    @field_validator("database_schema", mode="before")
+    @classmethod
+    def normalize_database_schema(cls, value: str | None) -> str:
+        if value is None:
+            return "claimmate"
+        normalized = value.strip()
+        return normalized or "claimmate"
 
     @field_validator("openai_api_key", mode="before")
     @classmethod
