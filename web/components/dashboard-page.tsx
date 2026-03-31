@@ -667,6 +667,62 @@ export function DashboardPage() {
             </div>
           </section>
 
+          <section className="grid cols-2">
+            <div className="card stack">
+              <div>
+                <h3>운영 KPI 정의</h3>
+                <p>이 화면에서 운영자가 매일 보는 기준 수치를 고정했습니다.</p>
+              </div>
+              <div className="summary-list">
+                <div className="summary-row">
+                  <span className="muted">처리 대기</span>
+                  <strong>{summary.open_claims + summary.in_review_claims}</strong>
+                </div>
+                <p className="metric-caption">접수 + 검토 중. 오늘 바로 처리해야 하는 기본 backlog입니다.</p>
+                <div className="summary-row">
+                  <span className="muted">자동화 큐</span>
+                  <strong>{summary.reply_ready_claims}</strong>
+                </div>
+                <p className="metric-caption">AI 분류와 답변 초안이 준비되어 승인만 남은 건입니다.</p>
+                <div className="summary-row">
+                  <span className="muted">후속 확인</span>
+                  <strong>{summary.follow_up_needed_claims}</strong>
+                </div>
+                <p className="metric-caption">답변 발송 후 아직 닫지 않은 건으로, 운영 누락 방지용 큐입니다.</p>
+                <div className="summary-row">
+                  <span className="muted">고위험</span>
+                  <strong>{summary.high_urgency_claims}</strong>
+                </div>
+                <p className="metric-caption">파손, 오배송, 환불, 긴급 키워드가 걸린 우선 검토 대상입니다.</p>
+              </div>
+            </div>
+
+            <div className="card stack">
+              <div>
+                <h3>SLA / 일괄 처리 기준</h3>
+                <p>이번 버전에서는 운영 안전성을 우선해 bulk action을 열지 않기로 결정했습니다.</p>
+              </div>
+              <div className="resource-links">
+                <div className="resource-link">
+                  <strong>High urgency</strong>
+                  <p>30분 이내 1차 확인, 교환/환불 약속 전에는 사람이 최종 검토</p>
+                </div>
+                <div className="resource-link">
+                  <strong>Medium urgency</strong>
+                  <p>4시간 이내 분류와 답변 초안 확인, 정책 문구와 배송비 반영 점검</p>
+                </div>
+                <div className="resource-link">
+                  <strong>Low urgency</strong>
+                  <p>당일 내 응답, 배송/일반 문의는 자동화 큐 우선 활용</p>
+                </div>
+                <div className="resource-link">
+                  <strong>Bulk action decision</strong>
+                  <p>반품, 환불, 파손, 오배송은 예외 조건이 많아 현재는 개별 검토만 허용합니다.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section className="card stack">
             <div>
               <h3>자동화 출처</h3>

@@ -177,6 +177,7 @@ def test_claim_reply_send_can_keep_claim_open(monkeypatch) -> None:
         assert payload["reply_deliveries"][0]["channel"] == "manual_handoff"
         assert payload["audit_logs"][0]["event_type"] == "reply_sent"
         assert payload["audit_logs"][0]["payload_json"]["mark_done"] is False
+        assert payload["audit_logs"][0]["payload_json"]["previous_status"] == "in_review"
 
         filtered_claims = client.get("/api/claims?follow_up_needed=true")
         assert filtered_claims.status_code == 200
@@ -271,6 +272,7 @@ def test_claim_reply_send_records_message_and_completes_claim(monkeypatch) -> No
         assert payload["audit_logs"][0]["event_type"] == "reply_sent"
         assert payload["audit_logs"][0]["actor"] == "manager@alpha-seller.local"
         assert payload["audit_logs"][0]["payload_json"]["mark_done"] is True
+        assert payload["audit_logs"][0]["payload_json"]["previous_status"] == "open"
         assert payload["audit_logs"][0]["payload_json"]["source"] == "manual_edit"
         assert payload["reply_deliveries"][0]["status"] == "sent"
         assert payload["reply_deliveries"][0]["channel"] == "manual_handoff"

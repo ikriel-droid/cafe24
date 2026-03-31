@@ -74,12 +74,12 @@
 
 ## 7. Operations UX
 
-- [ ] 대시보드 KPI 최종 정의
-- [ ] 운영자 메모 / 인수인계 UX 보강
-- [ ] 감사 로그 검색 / 필터 추가
-- [ ] 클레임 이력 diff 보기
-- [ ] bulk action 지원 여부 결정
-- [ ] SLA / 긴급도 기준 정리
+- [x] 대시보드 KPI 최종 정의
+- [x] 운영자 메모 / 인수인계 UX 보강
+- [x] 감사 로그 검색 / 필터 추가
+- [x] 클레임 이력 diff 보기
+- [x] bulk action 지원 여부 결정
+- [x] SLA / 긴급도 기준 정리
 
 ## 8. Observability And Safety
 

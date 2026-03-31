@@ -420,13 +420,17 @@ def update_claim_status(
     operator: OperatorUser | None = None,
 ) -> Claim:
     claim = get_claim(session, claim_id, operator)
+    previous_status = claim.status.value
     claim.status = status_value
     record_audit_log(
         session,
         claim_id=claim.id,
         actor=actor,
         event_type="status_changed",
-        payload_json={"status": status_value.value},
+        payload_json={
+            "previous_status": previous_status,
+            "status": status_value.value,
+        },
     )
     session.add(claim)
     session.commit()
@@ -532,6 +536,7 @@ def send_claim_reply(session: Session, claim_id: int, payload: ClaimReplySend, o
         )
     )
 
+    previous_status = claim.status.value
     if payload.mark_done:
         claim.status = ClaimStatus.DONE
         session.add(claim)
@@ -548,6 +553,7 @@ def send_claim_reply(session: Session, claim_id: int, payload: ClaimReplySend, o
             "destination": delivery_result.destination,
             "external_delivery_id": delivery_result.external_delivery_id,
             "mark_done": payload.mark_done,
+            "previous_status": previous_status,
             "status": claim.status.value,
             "source": "manual_edit" if payload.reply_body else "latest_draft",
             "reply_preview": reply_body[:140],

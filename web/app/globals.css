@@ -456,6 +456,22 @@ tbody tr:hover {
   line-height: 1.5;
 }
 
+.audit-diff-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.audit-diff-item {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .claim-automation-cell {
   display: grid;
   gap: 6px;

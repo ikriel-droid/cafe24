@@ -202,6 +202,22 @@ Relevant backend env vars:
 - `OPENAI_INPUT_COST_PER_1M_TOKENS`
 - `OPENAI_OUTPUT_COST_PER_1M_TOKENS`
 
+## Operations UX
+
+The dashboard and claim detail views now carry the current operations playbook:
+
+- KPI definitions are fixed in the dashboard for backlog, automation queue, follow-up queue, and high-risk claims
+- SLA guidance is fixed in the dashboard:
+  - high urgency: first check within 30 minutes
+  - medium urgency: classify and review within 4 hours
+  - low urgency: same-day response
+- Bulk actions are intentionally disabled for now because refund, defect, misdelivery, and exception-policy cases still require per-claim review
+- Claim detail now includes:
+  - internal note templates for handoff
+  - recent handoff / recent internal note summaries
+  - audit-log search and event filtering
+  - payload diff rendering when audit logs contain previous/next values
+
 ## Database Lifecycle
 
 ClaimMate now includes an Alembic baseline migration, schema-aware PostgreSQL setup, demo-data reset commands, and claim soft-delete retention metadata.

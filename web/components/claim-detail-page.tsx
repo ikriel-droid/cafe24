@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { Claim, ClaimStatus, ClassificationResponse, DraftReplyResponse, SuggestedAction } from "@/lib/types";
+import { AuditLog, Claim, ClaimStatus, ClassificationResponse, DraftReplyResponse, SuggestedAction } from "@/lib/types";
 import {
   Badge,
   categoryLabels,
@@ -27,6 +27,55 @@ function formatAuditPayload(payload: Record<string, unknown> | null | undefined)
   return Object.entries(payload)
     .map(([key, value]) => `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`)
     .join(" / ");
+}
+
+function extractInternalNote(log: AuditLog) {
+  const note = log.payload_json?.note;
+  return typeof note === "string" ? note : null;
+}
+
+function formatAuditValue(key: string, value: unknown) {
+  if (typeof value !== "string") {
+    return JSON.stringify(value);
+  }
+
+  if (key.includes("status")) {
+    return statusLabels[value as ClaimStatus] ?? value;
+  }
+  if (key.includes("category")) {
+    return categoryLabels[value as Claim["category"]] ?? value;
+  }
+  if (key.includes("urgency")) {
+    return urgencyLabels[value as Claim["urgency"]] ?? value;
+  }
+  return value;
+}
+
+function buildAuditDiffLines(payload: Record<string, unknown> | null | undefined) {
+  if (!payload) {
+    return [];
+  }
+
+  const lines: string[] = [];
+  for (const [key, previousValue] of Object.entries(payload)) {
+    if (!key.startsWith("previous_")) {
+      continue;
+    }
+
+    const baseKey = key.replace("previous_", "");
+    const nextValue = payload[`next_${baseKey}`] ?? payload[baseKey];
+    if (nextValue === undefined) {
+      continue;
+    }
+
+    lines.push(`${baseKey}: ${formatAuditValue(baseKey, previousValue)} -> ${formatAuditValue(baseKey, nextValue)}`);
+  }
+
+  return lines;
+}
+
+function buildAuditEventOptions(logs: AuditLog[] | undefined) {
+  return Array.from(new Set((logs ?? []).map((log) => log.event_type))).sort();
 }
 
 function formatPercent(value: number | null | undefined) {
@@ -75,6 +124,8 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
   const [workingAction, setWorkingAction] = useState<string | null>(null);
   const [replyDraft, setReplyDraft] = useState("");
   const [closeAfterSend, setCloseAfterSend] = useState(true);
+  const [auditQuery, setAuditQuery] = useState("");
+  const [auditEventType, setAuditEventType] = useState("all");
 
   async function loadClaim() {
     setLoading(true);
@@ -98,6 +149,37 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
   const latestReply = findLatestSuggestion(claim?.suggested_actions, "draft_reply");
   const hasGeneratedReply = Boolean(latestReply?.draft_reply);
   const isReplyEdited = hasGeneratedReply && replyDraft !== (latestReply?.draft_reply ?? "");
+  const auditLogs = claim?.audit_logs ?? [];
+  const internalNotes = useMemo(() => auditLogs.filter((log) => log.event_type === "internal_note_added"), [auditLogs]);
+  const handoffNotes = useMemo(
+    () =>
+      internalNotes.filter((log) => {
+        const note = extractInternalNote(log)?.toLowerCase();
+        return Boolean(note && (note.includes("handoff") || note.includes("인수인계")));
+      }),
+    [internalNotes],
+  );
+  const latestHandoffNote = handoffNotes[0] ?? internalNotes[0] ?? null;
+  const auditEventOptions = useMemo(() => buildAuditEventOptions(auditLogs), [auditLogs]);
+  const filteredAuditLogs = useMemo(() => {
+    const normalizedQuery = auditQuery.trim().toLowerCase();
+    return auditLogs.filter((log) => {
+      if (auditEventType !== "all" && log.event_type !== auditEventType) {
+        return false;
+      }
+
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      const payloadText = formatAuditPayload(log.payload_json)?.toLowerCase() ?? "";
+      return (
+        log.event_type.toLowerCase().includes(normalizedQuery) ||
+        log.actor.toLowerCase().includes(normalizedQuery) ||
+        payloadText.includes(normalizedQuery)
+      );
+    });
+  }, [auditLogs, auditEventType, auditQuery]);
 
   useEffect(() => {
     setReplyDraft(latestReply?.draft_reply ?? "");
@@ -269,6 +351,12 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
     } finally {
       setWorkingAction(null);
     }
+  }
+
+  function applyNoteTemplate(template: string) {
+    setInternalNote(template);
+    setNotice(null);
+    setError(null);
   }
 
   if (loading) {
@@ -534,6 +622,29 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
           <h3>내부 처리 메모</h3>
           <p>고객에게는 보이지 않는 운영 메모를 남겨 다음 담당자와 공유합니다.</p>
         </div>
+        <div className="actions">
+          <button
+            type="button"
+            className="button ghost"
+            onClick={() => applyNoteTemplate("[HANDOFF] 다음 담당자 확인 필요 / 고객 회신 대기 / 완료 전 검토 포인트 정리")}
+          >
+            인수인계 템플릿
+          </button>
+          <button
+            type="button"
+            className="button ghost"
+            onClick={() => applyNoteTemplate("고객 추가 자료 대기 / 도착 즉시 재검토 예정")}
+          >
+            자료 대기 템플릿
+          </button>
+          <button
+            type="button"
+            className="button ghost"
+            onClick={() => applyNoteTemplate("판매자 확인 필요 / 정책 예외 적용 여부 검토")}
+          >
+            정책 검토 템플릿
+          </button>
+        </div>
         <textarea
           className="textarea reply-editor"
           value={internalNote}
@@ -544,6 +655,26 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
           <button className="button secondary" onClick={handleAddInternalNote} disabled={!internalNote.trim() || !!workingAction}>
             Save Internal Note
           </button>
+        </div>
+        <div className="grid cols-2">
+          <div className="tile-row">
+            <strong>최근 인수인계 메모</strong>
+            <p>{latestHandoffNote ? extractInternalNote(latestHandoffNote) : "아직 저장된 인수인계 메모가 없습니다."}</p>
+          </div>
+          <div className="tile-row">
+            <strong>최근 내부 메모</strong>
+            {internalNotes.length > 0 ? (
+              <div className="plain-list">
+                {internalNotes.slice(0, 3).map((log) => (
+                  <p key={log.id} className="timeline-meta">
+                    {extractInternalNote(log)} / {formatDate(log.created_at)}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <p>아직 내부 메모가 없습니다.</p>
+            )}
+          </div>
         </div>
       </section>
 
@@ -582,14 +713,45 @@ export function ClaimDetailPage({ claimId }: { claimId: string }) {
           <h3>감사 로그</h3>
           <p>분류, 답변 생성, 발송 처리, 상태 변경, 메모 저장 이력을 시간순으로 확인합니다.</p>
         </div>
+        <div className="toolbar">
+          <label className="field search-field">
+            <span className="muted">검색</span>
+            <input value={auditQuery} onChange={(event) => setAuditQuery(event.target.value)} placeholder="event, actor, payload 검색" />
+          </label>
+          <label className="field compact-field">
+            <span className="muted">이벤트</span>
+            <select value={auditEventType} onChange={(event) => setAuditEventType(event.target.value)}>
+              <option value="all">전체</option>
+              {auditEventOptions.map((eventType) => (
+                <option key={eventType} value={eventType}>
+                  {eventType}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <p className="muted">현재 {filteredAuditLogs.length}건 표시 중입니다.</p>
         <div className="timeline">
-          {claim.audit_logs?.map((log) => {
+          {filteredAuditLogs.map((log) => {
             const payloadText = formatAuditPayload(log.payload_json);
+            const diffLines = buildAuditDiffLines(log.payload_json);
 
             return (
               <div key={log.id} className="timeline-item">
-                <strong>{log.event_type}</strong>
+                <div className="actions">
+                  <strong>{log.event_type}</strong>
+                  {diffLines.length > 0 ? <Badge tone="accent">diff</Badge> : null}
+                </div>
                 <p>{log.actor}</p>
+                {diffLines.length > 0 ? (
+                  <div className="audit-diff-list">
+                    {diffLines.map((line) => (
+                      <p key={line} className="audit-diff-item">
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
                 {payloadText ? <p className="timeline-meta">{payloadText}</p> : null}
                 <p className="muted">{formatDate(log.created_at)}</p>
               </div>
