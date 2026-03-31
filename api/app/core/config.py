@@ -54,6 +54,15 @@ class Settings(BaseSettings):
     background_job_retry_max_seconds: int = 60
     claim_retention_days: int = 90
     seed_demo_data: bool = True
+    slow_request_threshold_ms: int = 1000
+    observability_max_events: int = 50
+    observability_alert_webhook_url: str | None = None
+    observability_alert_webhook_token: str | None = None
+    observability_alert_timeout_seconds: int = 5
+    auth_login_rate_limit_per_minute: int = 20
+    cafe24_webhook_rate_limit_per_minute: int = 120
+    service_circuit_breaker_failure_threshold: int = 3
+    service_circuit_breaker_recovery_seconds: int = 60
 
     @field_validator("database_url", mode="before")
     @classmethod
@@ -86,6 +95,8 @@ class Settings(BaseSettings):
         "cafe24_webhook_secret",
         "reply_delivery_webhook_url",
         "reply_delivery_webhook_token",
+        "observability_alert_webhook_url",
+        "observability_alert_webhook_token",
         mode="before",
     )
     @classmethod

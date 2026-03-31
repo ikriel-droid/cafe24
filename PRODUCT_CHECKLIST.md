@@ -3,7 +3,7 @@
 로컬 MVP 이후 실제 서비스 완성까지 필요한 작업 체크리스트입니다.
 
 운영 규칙:
-- 아직 남은 항목은 `[ ]`
+- 아직 안 끝난 항목은 `[ ]`
 - 끝난 항목은 `[x]`
 - 작업이 끝날 때마다 바로 이 파일을 갱신
 
@@ -83,12 +83,12 @@
 
 ## 8. Observability And Safety
 
-- [ ] 구조화된 에러 로깅 추가
-- [ ] API / webhook / job 메트릭 수집
-- [ ] 알림 채널 연동
-- [ ] rate limit / timeout / circuit breaker 정책
-- [ ] 민감정보 마스킹 규칙 적용
-- [ ] 관리자용 진단 페이지 추가
+- [x] 구조화된 에러 로깅 추가
+- [x] API / webhook / job 메트릭 수집
+- [x] 알림 채널 연동
+- [x] rate limit / timeout / circuit breaker 정책
+- [x] 민감정보 마스킹 규칙 적용
+- [x] 관리자용 진단 페이지 추가
 
 ## 9. Deployment And Release
 

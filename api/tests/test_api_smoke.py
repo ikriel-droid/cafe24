@@ -14,6 +14,7 @@ from app.db.session import reset_engine, session_scope
 from app.integrations.cafe24.oauth_client import Cafe24OAuthTokens
 from app.integrations.cafe24.sync_service import Cafe24SyncService
 from app.models import AIInvocationLog, Claim
+from app.observability.service import get_observability_service
 
 
 def login_as(client: TestClient, email: str = "manager@alpha-seller.local", password: str = "demo1234") -> dict:
@@ -721,11 +722,17 @@ def test_cafe24_live_sync_imports_orders_shipments_and_claims(monkeypatch) -> No
         sync_response = client.post("/api/integrations/cafe24/live-sync")
         assert sync_response.status_code == 200
         sync_payload = sync_response.json()
-        assert sync_payload["last_sync_result"] == "live_completed"
-        assert sync_payload["synced_orders"] == 2
-        assert sync_payload["synced_claims"] == 2
-        assert sync_payload["recent_events"][0]["event_type"] == "live_sync"
-        assert sync_payload["next_action_type"] == "open_link"
+        live_sync_job_id = latest_job_id(sync_payload, "cafe24.live_sync")
+        assert wait_for_job(client, live_sync_job_id)["status"] == "succeeded"
+
+        refreshed_status = client.get("/api/integrations/cafe24")
+        assert refreshed_status.status_code == 200
+        refreshed_payload = refreshed_status.json()
+        assert refreshed_payload["last_sync_result"] == "live_completed"
+        assert refreshed_payload["synced_orders"] == 2
+        assert refreshed_payload["synced_claims"] == 2
+        assert refreshed_payload["recent_events"][0]["event_type"] == "live_sync"
+        assert refreshed_payload["next_action_type"] == "open_link"
 
         claims_response = client.get("/api/claims?q=CAFE24-900")
         assert claims_response.status_code == 200
@@ -1130,4 +1137,50 @@ def test_ai_invocations_record_usage_review_and_fallback_metadata(monkeypatch) -
         assert invocations[0].total_tokens == 130
         assert invocations[0].estimated_cost_usd > 0
         assert invocations[1].fallback_used is True
+
+
+def test_admin_diagnostics_endpoint_exposes_masked_observability_snapshot(monkeypatch) -> None:
+    temp_root = Path(".tmp") / "tests" / "admin-diagnostics"
+    if temp_root.exists():
+        shutil.rmtree(temp_root)
+    temp_root.mkdir(parents=True, exist_ok=True)
+
+    database_url = f"sqlite:///{temp_root.joinpath('claimmate-test.db').resolve().as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("SEED_DEMO_DATA", "true")
+    get_settings.cache_clear()
+    reset_engine()
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        login_as(client)
+        claims_response = client.get("/api/claims")
+        assert claims_response.status_code == 200
+
+        observability = get_observability_service()
+        observability.record_error(
+            component="support_test",
+            message="captured support error",
+            payload={"access_token": "secret-token", "customer_name": "홍길동"},
+            severity="error",
+        )
+        observability.dispatch_alert(
+            severity="warning",
+            event_type="support_test_alert",
+            message="captured support alert",
+            payload={"authorization": "Bearer abc", "email": "manager@example.com"},
+        )
+
+        diagnostics_response = client.get("/api/admin/diagnostics")
+        assert diagnostics_response.status_code == 200
+        payload = diagnostics_response.json()
+        assert payload["request_metrics"]["total_requests"] >= 2
+        assert any(route["route"] == "/api/claims" for route in payload["request_metrics"]["routes"])
+        assert payload["recent_errors"][0]["payload_json"]["access_token"] == "[redacted]"
+        assert payload["recent_errors"][0]["payload_json"]["customer_name"] != "홍길동"
+        assert payload["recent_alerts"][0]["payload_json"]["authorization"] == "[redacted]"
+        assert payload["recent_alerts"][0]["payload_json"]["email"] != "manager@example.com"
+        assert payload["masking_rules"]
+        assert payload["cafe24"] is not None
 

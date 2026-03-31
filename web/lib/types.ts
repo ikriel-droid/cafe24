@@ -210,6 +210,121 @@ export interface DashboardCafe24Overview {
   next_action_href: string | null;
 }
 
+export interface DiagnosticsRequestRoute {
+  method: string;
+  route: string;
+  request_count: number;
+  error_count: number;
+  slow_count: number;
+  avg_duration_ms: number;
+  max_duration_ms: number;
+  last_status_code: number | null;
+  last_seen_at: string | null;
+}
+
+export interface DiagnosticsRequestMetrics {
+  total_requests: number;
+  client_errors: number;
+  server_errors: number;
+  slow_requests: number;
+  routes: DiagnosticsRequestRoute[];
+}
+
+export interface DiagnosticsWebhookEvent {
+  event_type: string;
+  count: number;
+  duplicate_count: number;
+  failed_count: number;
+  last_status: string | null;
+  last_seen_at: string | null;
+}
+
+export interface DiagnosticsWebhookMetrics {
+  total_received: number;
+  duplicate_count: number;
+  failed_count: number;
+  events: DiagnosticsWebhookEvent[];
+}
+
+export interface DiagnosticsJobType {
+  job_type: string;
+  run_count: number;
+  success_count: number;
+  retry_scheduled_count: number;
+  dead_letter_count: number;
+  last_status: string | null;
+  last_seen_at: string | null;
+}
+
+export interface DiagnosticsJobMetrics {
+  total_runs: number;
+  succeeded: number;
+  retry_scheduled: number;
+  dead_letter: number;
+  job_types: DiagnosticsJobType[];
+}
+
+export interface DiagnosticsAlert {
+  occurred_at: string;
+  severity: string;
+  event_type: string;
+  message: string;
+  payload_json: Record<string, unknown> | null;
+  channel: string;
+  delivery_status: string;
+  delivery_error: string | null;
+}
+
+export interface DiagnosticsError {
+  occurred_at: string;
+  component: string;
+  severity: string;
+  message: string;
+  payload_json: Record<string, unknown> | null;
+}
+
+export interface DiagnosticsCircuitBreaker {
+  service_name: string;
+  state: string;
+  failure_count: number;
+  failure_threshold: number;
+  recovery_seconds: number;
+  opened_at: string | null;
+  last_failure_at: string | null;
+  last_success_at: string | null;
+}
+
+export interface DiagnosticsRateLimitPolicy {
+  scope: string;
+  limit: number;
+  window_seconds: number;
+  active_keys: number;
+}
+
+export interface DiagnosticsTimeoutPolicy {
+  target: string;
+  timeout_seconds: number;
+}
+
+export interface AdminDiagnostics {
+  generated_at: string;
+  app_name: string;
+  environment: string;
+  uptime_seconds: number;
+  request_metrics: DiagnosticsRequestMetrics;
+  webhook_metrics: DiagnosticsWebhookMetrics;
+  job_metrics: DiagnosticsJobMetrics;
+  recent_alerts: DiagnosticsAlert[];
+  recent_errors: DiagnosticsError[];
+  circuit_breakers: DiagnosticsCircuitBreaker[];
+  rate_limit_policies: DiagnosticsRateLimitPolicy[];
+  timeout_policies: DiagnosticsTimeoutPolicy[];
+  masking_rules: string[];
+  cafe24: DashboardCafe24Overview | null;
+  recent_jobs: BackgroundJob[];
+  recent_events: Cafe24ActivityEvent[];
+}
+
 export interface ClassificationResponse {
   claim_id: number;
   category: ClaimCategory;

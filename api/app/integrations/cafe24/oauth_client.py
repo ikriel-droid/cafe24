@@ -7,6 +7,8 @@ from urllib.parse import urlencode
 
 import httpx
 
+from app.observability.policies import get_circuit_breaker_registry
+
 
 @dataclass(slots=True)
 class Cafe24OAuthTokens:
@@ -87,22 +89,34 @@ class Cafe24OAuthClient:
         return _extract_collection(data, "shipments")
 
     def _request_tokens(self, mall_id: str, payload: dict[str, str]) -> Cafe24OAuthTokens:
-        response = httpx.post(
-            f"https://{mall_id}.cafe24api.com/api/v2/oauth/token",
-            data=payload,
-            headers={"Accept": "application/json"},
-            timeout=self.timeout_seconds,
-        )
-        response.raise_for_status()
-        data = response.json()
-        return Cafe24OAuthTokens(
-            access_token=str(data["access_token"]),
-            refresh_token=str(data["refresh_token"]) if data.get("refresh_token") else None,
-            token_type=str(data.get("token_type") or "Bearer"),
-            access_token_expires_at=_parse_expiry(data, "access_token_expires_at", "expires_at", "expires_in"),
-            refresh_token_expires_at=_parse_expiry(data, "refresh_token_expires_at", "refresh_expires_at", "refresh_token_expires_in"),
-            scopes=_parse_scopes(data.get("scope") or data.get("scopes")),
-            raw_response=data,
+        def perform_request() -> Cafe24OAuthTokens:
+            response = httpx.post(
+                f"https://{mall_id}.cafe24api.com/api/v2/oauth/token",
+                data=payload,
+                headers={"Accept": "application/json"},
+                timeout=self.timeout_seconds,
+            )
+            response.raise_for_status()
+            data = response.json()
+            return Cafe24OAuthTokens(
+                access_token=str(data["access_token"]),
+                refresh_token=str(data["refresh_token"]) if data.get("refresh_token") else None,
+                token_type=str(data.get("token_type") or "Bearer"),
+                access_token_expires_at=_parse_expiry(data, "access_token_expires_at", "expires_at", "expires_in"),
+                refresh_token_expires_at=_parse_expiry(
+                    data,
+                    "refresh_token_expires_at",
+                    "refresh_expires_at",
+                    "refresh_token_expires_in",
+                ),
+                scopes=_parse_scopes(data.get("scope") or data.get("scopes")),
+                raw_response=data,
+            )
+
+        return get_circuit_breaker_registry().execute(
+            "cafe24_api",
+            "oauth_token",
+            perform_request,
         )
 
     def _request_json(
@@ -113,23 +127,30 @@ class Cafe24OAuthClient:
         access_token: str,
         params: dict[str, str] | None = None,
     ) -> dict[str, Any] | list[dict[str, Any]]:
-        response = httpx.request(
-            method=method,
-            url=url,
-            params=params,
-            headers={
-                "Accept": "application/json",
-                "Authorization": f"Bearer {access_token}",
-            },
-            timeout=self.timeout_seconds,
+        def perform_request() -> dict[str, Any] | list[dict[str, Any]]:
+            response = httpx.request(
+                method=method,
+                url=url,
+                params=params,
+                headers={
+                    "Accept": "application/json",
+                    "Authorization": f"Bearer {access_token}",
+                },
+                timeout=self.timeout_seconds,
+            )
+            response.raise_for_status()
+            data = response.json()
+            if isinstance(data, dict):
+                return data
+            if isinstance(data, list):
+                return [item for item in data if isinstance(item, dict)]
+            return {}
+
+        return get_circuit_breaker_registry().execute(
+            "cafe24_api",
+            f"{method.lower()}:{url}",
+            perform_request,
         )
-        response.raise_for_status()
-        data = response.json()
-        if isinstance(data, dict):
-            return data
-        if isinstance(data, list):
-            return [item for item in data if isinstance(item, dict)]
-        return {}
 
 
 def _parse_scopes(value: str | list[str] | None) -> list[str]:

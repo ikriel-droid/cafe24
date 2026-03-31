@@ -9,6 +9,8 @@ from app.ai.base import AIProvider, AIResultMetadata, AIUsage, ClassificationRes
 from app.ai.mock_provider import MockAIProvider
 from app.ai.prompts import PromptBundle, build_classification_prompt, build_draft_reply_prompt
 from app.models import Claim, ClaimCategory, ClaimMessage, ClaimUrgency, Policy
+from app.observability.policies import get_circuit_breaker_registry
+from app.observability.service import get_observability_service
 
 
 KNOWN_MODEL_PRICING_PER_1M_TOKENS: dict[str, tuple[float, float]] = {
@@ -65,6 +67,12 @@ class OpenAIProvider(AIProvider):
                 metadata=metadata,
             )
         except Exception as exc:
+            get_observability_service().record_error(
+                component="openai_responses",
+                message=str(exc),
+                payload={"claim_id": claim.id, "action_type": "classify", "model": self.model},
+                severity="warning",
+            )
             fallback_result = self._fallback.classify_claim(claim, messages)
             fallback_result.metadata.requested_provider_name = "openai_responses"
             fallback_result.metadata.model_name = self.model
@@ -102,6 +110,12 @@ class OpenAIProvider(AIProvider):
                 metadata=metadata,
             )
         except Exception as exc:
+            get_observability_service().record_error(
+                component="openai_responses",
+                message=str(exc),
+                payload={"claim_id": claim.id, "action_type": "draft_reply", "model": self.model},
+                severity="warning",
+            )
             fallback_result = self._fallback.draft_reply(claim, policy, messages)
             fallback_result.metadata.requested_provider_name = "openai_responses"
             fallback_result.metadata.model_name = self.model
@@ -153,15 +167,11 @@ class OpenAIProvider(AIProvider):
                 }
             )
 
-        with httpx.Client(
-            base_url=self.base_url,
-            timeout=self.timeout_seconds,
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-        ) as client:
-            response = client.post("responses", json=payload)
+        response = get_circuit_breaker_registry().execute(
+            "openai_responses",
+            "responses.create",
+            lambda: self._post_response(payload),
+        )
 
         if response.status_code >= 400:
             raise RuntimeError(f"OpenAI Responses API failed with status {response.status_code}: {response.text}")
@@ -170,6 +180,17 @@ class OpenAIProvider(AIProvider):
         parsed_output = self._parse_output_json(body)
         parsed_output["_claimmate_usage"] = self._extract_usage(body)
         return parsed_output
+
+    def _post_response(self, payload: dict[str, Any]) -> httpx.Response:
+        with httpx.Client(
+            base_url=self.base_url,
+            timeout=self.timeout_seconds,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+        ) as client:
+            return client.post("responses", json=payload)
 
     def _supports_structured_outputs(self) -> bool:
         return not self.model.endswith("-pro")

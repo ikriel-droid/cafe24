@@ -472,6 +472,19 @@ tbody tr:hover {
   line-height: 1.5;
 }
 
+.diagnostics-code {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #efe3d2;
+  background: #fffaf4;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .claim-automation-cell {
   display: grid;
   gap: 6px;

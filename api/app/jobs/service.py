@@ -22,6 +22,7 @@ from app.models import (
     Claim,
     Merchant,
 )
+from app.observability.service import get_observability_service
 from app.services.claim_service import (
     apply_mock_webhook_to_claim,
     list_claims,
@@ -239,6 +240,7 @@ def _fallback_queued_job_ids(limit: int, excluded_ids: set[int]) -> list[int]:
 
 def process_background_job(job_id: int, settings: Settings | None = None) -> BackgroundJob | None:
     settings = settings or get_settings()
+    observability = get_observability_service()
     session = get_session_factory()()
     try:
         job = session.get(BackgroundJob, job_id)
@@ -264,8 +266,19 @@ def process_background_job(job_id: int, settings: Settings | None = None) -> Bac
         session.add(job)
         session.commit()
         session.refresh(job)
+        observability.record_job_event(job_type=job.job_type, status=job.status.value)
+        if job.job_type == "cafe24.live_webhook_delivery":
+            event_type = result.get("event_type") if isinstance(result, dict) else None
+            if isinstance(event_type, str) and event_type:
+                observability.record_webhook_event(event_type=event_type, status="processed")
         return job
     except Exception as exc:
+        observability.record_error(
+            component="background_job",
+            message=str(exc),
+            payload={"job_id": job_id},
+            severity="warning",
+        )
         session.rollback()
         retry_session = get_session_factory()()
         try:
@@ -278,6 +291,17 @@ def process_background_job(job_id: int, settings: Settings | None = None) -> Bac
                 job.status = BackgroundJobStatus.DEAD_LETTER
                 job.completed_at = datetime.now(UTC)
                 job.available_at = None
+                observability.dispatch_alert(
+                    severity="critical",
+                    event_type="background_job_dead_letter",
+                    message=f"Background job moved to dead letter: {job.job_type}",
+                    payload={
+                        "job_id": job.id,
+                        "job_type": job.job_type,
+                        "retry_count": job.retry_count,
+                        "error_message": str(exc),
+                    },
+                )
             else:
                 job.status = BackgroundJobStatus.RETRY_SCHEDULED
                 delay_seconds = _retry_delay_seconds(job.retry_count, settings)
@@ -286,6 +310,7 @@ def process_background_job(job_id: int, settings: Settings | None = None) -> Bac
             retry_session.add(job)
             retry_session.commit()
             retry_session.refresh(job)
+            observability.record_job_event(job_type=job.job_type, status=job.status.value)
             return job
         finally:
             retry_session.close()

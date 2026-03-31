@@ -6,6 +6,8 @@ from typing import Any
 import httpx
 
 from app.models import ReplyDeliveryChannel, ReplyDeliveryStatus
+from app.observability.policies import get_circuit_breaker_registry
+from app.observability.service import get_observability_service
 from app.reply_delivery.base import ReplyDeliveryError, ReplyDeliveryProvider, ReplyDeliveryRequest, ReplyDeliveryResult
 
 
@@ -22,9 +24,18 @@ class WebhookReplyDeliveryProvider(ReplyDeliveryProvider):
             headers["authorization"] = f"Bearer {self.token}"
 
         try:
-            with httpx.Client(timeout=self.timeout_seconds) as client:
-                response = client.post(self.webhook_url, json=payload, headers=headers)
-        except httpx.HTTPError as exc:
+            response = get_circuit_breaker_registry().execute(
+                "reply_delivery_webhook",
+                "send_reply",
+                lambda: self._send_http_request(payload, headers),
+            )
+        except Exception as exc:
+            get_observability_service().record_error(
+                component="reply_delivery_webhook",
+                message=str(exc),
+                payload={"claim_id": request.claim.id, "webhook_url": self.webhook_url},
+                severity="warning",
+            )
             raise ReplyDeliveryError(
                 f"Reply delivery webhook request failed: {exc}",
                 channel=ReplyDeliveryChannel.WEBHOOK,
@@ -62,6 +73,10 @@ class WebhookReplyDeliveryProvider(ReplyDeliveryProvider):
             response_payload=response_payload,
             sent_at=datetime.now(UTC),
         )
+
+    def _send_http_request(self, payload: dict[str, Any], headers: dict[str, str]) -> httpx.Response:
+        with httpx.Client(timeout=self.timeout_seconds) as client:
+            return client.post(self.webhook_url, json=payload, headers=headers)
 
     def _build_payload(self, request: ReplyDeliveryRequest) -> dict[str, Any]:
         claim = request.claim

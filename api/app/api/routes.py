@@ -29,7 +29,10 @@ from app.jobs.service import (
     serialize_background_job,
 )
 from app.models import Claim, ClaimCategory, ClaimStatus, OperatorUser
+from app.observability import RateLimitExceededError, get_rate_limiter
+from app.observability.service import get_observability_service
 from app.schemas import (
+    AdminDiagnosticsRead,
     AuthLoginRequest,
     AuthSessionMerchant,
     AuthSessionResponse,
@@ -149,6 +152,29 @@ def build_auth_session_payload(operator: OperatorUser) -> AuthSessionResponse:
     )
 
 
+def build_dashboard_cafe24_overview(cafe24_status: dict[str, object]) -> DashboardCafe24Overview:
+    latest_event = cafe24_status["recent_events"][0] if cafe24_status["recent_events"] else None
+    return DashboardCafe24Overview(
+        health_status=cafe24_status["health_status"],
+        health_title=cafe24_status["health_title"],
+        health_detail=cafe24_status["health_detail"],
+        last_sync_result=cafe24_status["last_sync_result"],
+        last_synced_at=cafe24_status["last_synced_at"],
+        pending_webhooks=cafe24_status["pending_webhooks"],
+        recent_activity_count=len(cafe24_status["recent_events"]),
+        queued_jobs=cafe24_status["queued_jobs"],
+        running_jobs=cafe24_status["running_jobs"],
+        scheduled_jobs=cafe24_status["scheduled_jobs"],
+        dead_letter_jobs=cafe24_status["dead_letter_jobs"],
+        latest_event_title=latest_event["title"] if latest_event else None,
+        latest_event_status=latest_event["status"] if latest_event else None,
+        latest_event_occurred_at=latest_event["occurred_at"] if latest_event else None,
+        next_action_type=cafe24_status["next_action_type"],
+        next_action_label=cafe24_status["next_action_label"],
+        next_action_href=cafe24_status["next_action_href"],
+    )
+
+
 def attach_background_job_state(
     db: Session,
     merchant_id: int,
@@ -186,8 +212,35 @@ def resolve_merchant_id_from_state(state: str | None, fallback_merchant_id: int)
     return int(tail) if tail.isdigit() else fallback_merchant_id
 
 
+def enforce_rate_limit(*, scope: str, key: str, limit: int) -> None:
+    try:
+        get_rate_limiter().check(scope=scope, key=key, limit=limit, window_seconds=60)
+    except RateLimitExceededError as exc:
+        get_observability_service().record_error(
+            component="rate_limit",
+            message=f"{scope} limit exceeded.",
+            payload={
+                "scope": scope,
+                "key": key,
+                "limit": limit,
+                "retry_after_seconds": exc.retry_after_seconds,
+            },
+            severity="warning",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"{scope} rate limit exceeded. Retry after {exc.retry_after_seconds} seconds.",
+        ) from exc
+
+
 @router.post("/auth/login", response_model=AuthSessionResponse)
 def auth_login(payload: AuthLoginRequest, request: Request, db: Session = Depends(get_db)) -> AuthSessionResponse:
+    client_host = request.client.host if request.client else "unknown"
+    enforce_rate_limit(
+        scope="auth_login",
+        key=client_host,
+        limit=get_settings().auth_login_rate_limit_per_minute,
+    )
     operator = authenticate_operator(db, payload.email, payload.password)
     request.session["operator_user_id"] = operator.id
     return build_auth_session_payload(operator)
@@ -588,6 +641,12 @@ async def cafe24_live_webhook(
         payload=payload,
         headers=headers,
     )
+    client_host = request.client.host if request.client else "unknown"
+    enforce_rate_limit(
+        scope="cafe24_live_webhook",
+        key=f"{merchant.id}:{client_host}",
+        limit=settings.cafe24_webhook_rate_limit_per_minute,
+    )
     handler = build_cafe24_webhook_handler(settings)
     delivery, duplicate = ingest_live_webhook(
         db,
@@ -598,6 +657,11 @@ async def cafe24_live_webhook(
         payload=payload,
     )
     if duplicate:
+        get_observability_service().record_webhook_event(
+            event_type=delivery.event_type,
+            status="duplicate",
+            duplicate=True,
+        )
         return Cafe24WebhookIngestResponse(
             status="duplicate",
             duplicate=True,
@@ -615,6 +679,11 @@ async def cafe24_live_webhook(
     db.add(delivery)
     db.commit()
     db.refresh(delivery)
+    get_observability_service().record_webhook_event(
+        event_type=delivery.event_type,
+        status=delivery.status,
+        duplicate=False,
+    )
     job = enqueue_background_job(
         db,
         merchant_id=merchant.id,
@@ -634,6 +703,41 @@ async def cafe24_live_webhook(
         failed_reason=delivery.failed_reason,
         processed_at=delivery.processed_at,
         next_retry_at=get_webhook_next_retry_at(delivery),
+    )
+
+
+@router.get("/admin/diagnostics", response_model=AdminDiagnosticsRead)
+def admin_diagnostics(
+    current_operator: OperatorUser = Depends(require_manager),
+    db: Session = Depends(get_db),
+) -> AdminDiagnosticsRead:
+    settings = get_settings()
+    merchant = get_default_merchant(db, operator=current_operator)
+    claims = list_claims(db, merchant_id=merchant.id, operator=current_operator)
+    service = build_cafe24_service(settings)
+    cafe24_status = build_live_status(db, merchant, claims, settings, service.oauth_client)
+    if cafe24_status is None:
+        cafe24_status = service.get_status(db, merchant, claims, settings)
+    cafe24_status = attach_background_job_state(db, merchant.id, cafe24_status)
+    observability = get_observability_service().snapshot()
+
+    return AdminDiagnosticsRead(
+        generated_at=observability["generated_at"],
+        app_name=observability["app_name"],
+        environment=observability["environment"],
+        uptime_seconds=observability["uptime_seconds"],
+        request_metrics=observability["request_metrics"],
+        webhook_metrics=observability["webhook_metrics"],
+        job_metrics=observability["job_metrics"],
+        recent_alerts=observability["recent_alerts"],
+        recent_errors=observability["recent_errors"],
+        circuit_breakers=observability["circuit_breakers"],
+        rate_limit_policies=observability["rate_limit_policies"],
+        timeout_policies=observability["timeout_policies"],
+        masking_rules=observability["masking_rules"],
+        cafe24=build_dashboard_cafe24_overview(cafe24_status),
+        recent_jobs=cafe24_status["recent_jobs"],
+        recent_events=cafe24_status["recent_events"],
     )
 
 
@@ -697,27 +801,8 @@ def dashboard_summary(
     if cafe24_status is None:
         cafe24_status = service.get_status(db, merchant, claims, settings)
     cafe24_status = attach_background_job_state(db, merchant.id, cafe24_status)
-    latest_event = cafe24_status["recent_events"][0] if cafe24_status["recent_events"] else None
 
     return DashboardSummary(
         **summary.model_dump(exclude={"cafe24"}),
-        cafe24=DashboardCafe24Overview(
-            health_status=cafe24_status["health_status"],
-            health_title=cafe24_status["health_title"],
-            health_detail=cafe24_status["health_detail"],
-            last_sync_result=cafe24_status["last_sync_result"],
-            last_synced_at=cafe24_status["last_synced_at"],
-            pending_webhooks=cafe24_status["pending_webhooks"],
-            recent_activity_count=len(cafe24_status["recent_events"]),
-            queued_jobs=cafe24_status["queued_jobs"],
-            running_jobs=cafe24_status["running_jobs"],
-            scheduled_jobs=cafe24_status["scheduled_jobs"],
-            dead_letter_jobs=cafe24_status["dead_letter_jobs"],
-            latest_event_title=latest_event["title"] if latest_event else None,
-            latest_event_status=latest_event["status"] if latest_event else None,
-            latest_event_occurred_at=latest_event["occurred_at"] if latest_event else None,
-            next_action_type=cafe24_status["next_action_type"],
-            next_action_label=cafe24_status["next_action_label"],
-            next_action_href=cafe24_status["next_action_href"],
-        ),
+        cafe24=build_dashboard_cafe24_overview(cafe24_status),
     )

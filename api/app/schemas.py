@@ -347,6 +347,121 @@ class DashboardCafe24Overview(BaseModel):
     next_action_href: str | None
 
 
+class DiagnosticsRequestRouteRead(BaseModel):
+    method: str
+    route: str
+    request_count: int
+    error_count: int
+    slow_count: int
+    avg_duration_ms: float
+    max_duration_ms: float
+    last_status_code: int | None
+    last_seen_at: datetime | None
+
+
+class DiagnosticsRequestMetricsRead(BaseModel):
+    total_requests: int
+    client_errors: int
+    server_errors: int
+    slow_requests: int
+    routes: list[DiagnosticsRequestRouteRead] = Field(default_factory=list)
+
+
+class DiagnosticsWebhookEventRead(BaseModel):
+    event_type: str
+    count: int
+    duplicate_count: int
+    failed_count: int
+    last_status: str | None
+    last_seen_at: datetime | None
+
+
+class DiagnosticsWebhookMetricsRead(BaseModel):
+    total_received: int
+    duplicate_count: int
+    failed_count: int
+    events: list[DiagnosticsWebhookEventRead] = Field(default_factory=list)
+
+
+class DiagnosticsJobTypeRead(BaseModel):
+    job_type: str
+    run_count: int
+    success_count: int
+    retry_scheduled_count: int
+    dead_letter_count: int
+    last_status: str | None
+    last_seen_at: datetime | None
+
+
+class DiagnosticsJobMetricsRead(BaseModel):
+    total_runs: int
+    succeeded: int
+    retry_scheduled: int
+    dead_letter: int
+    job_types: list[DiagnosticsJobTypeRead] = Field(default_factory=list)
+
+
+class DiagnosticsAlertRead(BaseModel):
+    occurred_at: datetime
+    severity: str
+    event_type: str
+    message: str
+    payload_json: dict[str, Any] | None
+    channel: str
+    delivery_status: str
+    delivery_error: str | None
+
+
+class DiagnosticsErrorRead(BaseModel):
+    occurred_at: datetime
+    component: str
+    severity: str
+    message: str
+    payload_json: dict[str, Any] | None
+
+
+class DiagnosticsCircuitBreakerRead(BaseModel):
+    service_name: str
+    state: str
+    failure_count: int
+    failure_threshold: int
+    recovery_seconds: int
+    opened_at: datetime | None
+    last_failure_at: datetime | None
+    last_success_at: datetime | None
+
+
+class DiagnosticsRateLimitPolicyRead(BaseModel):
+    scope: str
+    limit: int
+    window_seconds: int
+    active_keys: int
+
+
+class DiagnosticsTimeoutPolicyRead(BaseModel):
+    target: str
+    timeout_seconds: int
+
+
+class AdminDiagnosticsRead(BaseModel):
+    generated_at: datetime
+    app_name: str
+    environment: str
+    uptime_seconds: int
+    request_metrics: DiagnosticsRequestMetricsRead
+    webhook_metrics: DiagnosticsWebhookMetricsRead
+    job_metrics: DiagnosticsJobMetricsRead
+    recent_alerts: list[DiagnosticsAlertRead] = Field(default_factory=list)
+    recent_errors: list[DiagnosticsErrorRead] = Field(default_factory=list)
+    circuit_breakers: list[DiagnosticsCircuitBreakerRead] = Field(default_factory=list)
+    rate_limit_policies: list[DiagnosticsRateLimitPolicyRead] = Field(default_factory=list)
+    timeout_policies: list[DiagnosticsTimeoutPolicyRead] = Field(default_factory=list)
+    masking_rules: list[str] = Field(default_factory=list)
+    cafe24: DashboardCafe24Overview | None = None
+    recent_jobs: list[BackgroundJobRead] = Field(default_factory=list)
+    recent_events: list[Cafe24ActivityEvent] = Field(default_factory=list)
+
+
 class DashboardSummary(BaseModel):
     total_claims: int
     open_claims: int

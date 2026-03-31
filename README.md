@@ -43,6 +43,7 @@ Auth and session vars are also included there: `SESSION_SECRET_KEY`, `SESSION_CO
 Optional Cafe24 placeholder vars are also included there: `CAFE24_CLIENT_ID`, `CAFE24_CLIENT_SECRET`, and `CAFE24_REDIRECT_URI`.
 AI productionization vars are also included there: `OPENAI_BASE_URL`, `OPENAI_TIMEOUT_SECONDS`, `OPENAI_INPUT_COST_PER_1M_TOKENS`, and `OPENAI_OUTPUT_COST_PER_1M_TOKENS`.
 Database lifecycle vars are also included there: `DATABASE_SCHEMA`, `AUTO_CREATE_TABLES`, and `CLAIM_RETENTION_DAYS`.
+Observability vars are also included there: `OBSERVABILITY_ALERT_WEBHOOK_URL`, `AUTH_LOGIN_RATE_LIMIT_PER_MINUTE`, and `SERVICE_CIRCUIT_BREAKER_FAILURE_THRESHOLD`.
 
 3. Copy frontend env:
 
@@ -217,6 +218,40 @@ The dashboard and claim detail views now carry the current operations playbook:
   - recent handoff / recent internal note summaries
   - audit-log search and event filtering
   - payload diff rendering when audit logs contain previous/next values
+
+## Observability And Safety
+
+ClaimMate now includes a manager-only diagnostics surface and runtime safety guards.
+
+- Admin diagnostics page: `/admin/diagnostics`
+  - request metrics by route
+  - webhook metrics by event type
+  - background job outcome metrics
+  - recent alerts and structured errors
+  - circuit breaker state
+  - rate-limit / timeout policy snapshot
+  - masking rules summary
+- Structured errors are recorded through a shared observability service and redact:
+  - access / refresh tokens
+  - API keys, secrets, auth headers, passwords, signatures
+  - customer names, emails, order numbers, and destinations
+- Safety policies now applied in the local stack:
+  - login rate limiting
+  - live Cafe24 webhook ingest rate limiting
+  - timeout policies for OpenAI, Cafe24, reply delivery, and alert webhooks
+  - circuit breakers around OpenAI, Cafe24 API, and reply-delivery webhook calls
+
+Relevant backend env vars:
+
+- `SLOW_REQUEST_THRESHOLD_MS`
+- `OBSERVABILITY_MAX_EVENTS`
+- `OBSERVABILITY_ALERT_WEBHOOK_URL`
+- `OBSERVABILITY_ALERT_WEBHOOK_TOKEN`
+- `OBSERVABILITY_ALERT_TIMEOUT_SECONDS`
+- `AUTH_LOGIN_RATE_LIMIT_PER_MINUTE`
+- `CAFE24_WEBHOOK_RATE_LIMIT_PER_MINUTE`
+- `SERVICE_CIRCUIT_BREAKER_FAILURE_THRESHOLD`
+- `SERVICE_CIRCUIT_BREAKER_RECOVERY_SECONDS`
 
 ## Database Lifecycle
 
