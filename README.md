@@ -345,8 +345,41 @@ The tracked remaining work lives in:
 
 - `PRODUCT_CHECKLIST.md`
 - `DATABASE_RUNBOOK.md`
+- `DEPLOYMENT_RUNBOOK.md`
+- `INCIDENT_RESPONSE_RUNBOOK.md`
 
 This file is the source of truth for post-MVP work. As items are completed, they should be updated from `[ ]` to `[x]`.
+
+## Deployment And Release
+
+Deployment assets now live under `deploy/` and are separated from the local dev compose stack.
+
+- Development stack:
+  - [docker-compose.yml](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\docker-compose.yml)
+  - Docker build targets use the `development` stage for `api` and `web`
+- Staging stack:
+  - [deploy/docker-compose.staging.yml](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\deploy\docker-compose.staging.yml)
+  - [deploy/.env.staging.example](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\deploy\.env.staging.example)
+  - [deploy/nginx/claimmate.staging.conf](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\deploy\nginx\claimmate.staging.conf)
+- Production stack:
+  - [deploy/docker-compose.production.yml](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\deploy\docker-compose.production.yml)
+  - [deploy/.env.production.example](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\deploy\.env.production.example)
+  - [deploy/nginx/claimmate.production.conf](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\deploy\nginx\claimmate.production.conf)
+
+Release automation now includes:
+
+- CI workflow: [.github/workflows/ci.yml](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\.github\workflows\ci.yml)
+  - backend pytest
+  - frontend production build
+- Release workflow: [.github/workflows/release.yml](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\.github\workflows\release.yml)
+  - builds production API/Web images
+  - pushes them to GHCR
+  - uploads a deployment bundle artifact for staging or production
+
+Operational docs:
+
+- deployment runbook: [DEPLOYMENT_RUNBOOK.md](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\DEPLOYMENT_RUNBOOK.md)
+- incident response runbook: [INCIDENT_RESPONSE_RUNBOOK.md](c:\Users\Administrator\.vscode\cli\cafe24\claimmate-ai\INCIDENT_RESPONSE_RUNBOOK.md)
 
 ## Useful Commands
 

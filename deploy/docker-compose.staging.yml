@@ -1,0 +1,81 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+
+  api:
+    image: ${CLAIMMATE_API_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      APP_ENV: ${APP_ENV}
+      API_PREFIX: /api
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_SCHEMA: ${DATABASE_SCHEMA}
+      AUTO_CREATE_TABLES: ${AUTO_CREATE_TABLES}
+      REDIS_URL: ${REDIS_URL}
+      DEFAULT_MERCHANT_ID: 1
+      SESSION_SECRET_KEY: ${SESSION_SECRET_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
+      CAFE24_CLIENT_ID: ${CAFE24_CLIENT_ID}
+      CAFE24_CLIENT_SECRET: ${CAFE24_CLIENT_SECRET}
+      CAFE24_REDIRECT_URI: ${CAFE24_REDIRECT_URI}
+      CAFE24_WEBHOOK_SECRET: ${CAFE24_WEBHOOK_SECRET}
+      OBSERVABILITY_ALERT_WEBHOOK_URL: ${OBSERVABILITY_ALERT_WEBHOOK_URL}
+      OBSERVABILITY_ALERT_WEBHOOK_TOKEN: ${OBSERVABILITY_ALERT_WEBHOOK_TOKEN}
+      REPLY_DELIVERY_MODE: ${REPLY_DELIVERY_MODE}
+      REPLY_DELIVERY_WEBHOOK_URL: ${REPLY_DELIVERY_WEBHOOK_URL}
+      REPLY_DELIVERY_WEBHOOK_TOKEN: ${REPLY_DELIVERY_WEBHOOK_TOKEN}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA}
+
+  web:
+    image: ${CLAIMMATE_WEB_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+
+  reverse-proxy:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_started
+      api:
+        condition: service_started
+    ports:
+      - "${PUBLIC_HTTP_PORT}:80"
+      - "${PUBLIC_HTTPS_PORT}:443"
+    volumes:
+      - ./nginx/claimmate.staging.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+
+volumes:
+  postgres-data:
+  redis-data:

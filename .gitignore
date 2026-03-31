@@ -22,6 +22,8 @@ web/coverage/
 dist/
 build/
 run-artifacts/
+deploy/.env.staging
+deploy/.env.production
 *.egg-info/
 api/.codex-backend.log
 api/.codex-backend.err.log

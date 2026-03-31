@@ -36,6 +36,7 @@ services:
   api:
     build:
       context: ./api
+      target: development
     container_name: claimmate-api
     restart: unless-stopped
     depends_on:
@@ -65,6 +66,7 @@ services:
   web:
     build:
       context: ./web
+      target: development
     container_name: claimmate-web
     restart: unless-stopped
     depends_on:

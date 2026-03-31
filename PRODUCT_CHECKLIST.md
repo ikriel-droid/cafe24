@@ -92,12 +92,12 @@
 
 ## 9. Deployment And Release
 
-- [ ] production Docker image 정리
-- [ ] 배포 환경변수 템플릿 정리
-- [ ] staging / production 분리
-- [ ] HTTPS / 도메인 / reverse proxy 구성
-- [ ] CI build / test / deploy 파이프라인 추가
-- [ ] 운영 문서 / 장애 대응 문서 정리
+- [x] production Docker image 정리
+- [x] 배포 환경변수 템플릿 정리
+- [x] staging / production 분리
+- [x] HTTPS / 도메인 / reverse proxy 구성
+- [x] CI build / test / deploy 파이프라인 추가
+- [x] 운영 문서 / 장애 대응 문서 정리
 
 ## 10. Commercial Readiness
 
